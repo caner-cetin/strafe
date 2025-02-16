@@ -20,7 +20,11 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 	app := r.Context().Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 	var body GetRandomTrackRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		internal.WriteError(w, internal.MalformedJSONBody)
+		if err.Error() == "EOF" {
+			internal.WriteError(w, internal.MissingJSONBody(err))
+			return
+		}
+		internal.WriteError(w, internal.MalformedJSONBody(err))
 		return
 	}
 	var anonId = pgtype.Text{String: body.AnonID, Valid: true}
@@ -29,28 +33,28 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 	track, err = app.DB.GetRandomUnlistenedTrack(r.Context(), anonId)
 	no_rows := errors.Is(err, sql.ErrNoRows)
 	if err != nil && (!no_rows) {
-		internal.WriteServerError(w, err)
+		internal.ServerError(w, err)
 		return
 	}
 	if no_rows {
 		tx, err := app.Conn.Begin(r.Context())
 		if err != nil {
-			internal.WriteServerError(w, err)
+			internal.ServerError(w, err)
 			return
 		}
 		defer tx.Rollback(r.Context())
 		qtx := app.DB.WithTx(tx)
 		if err := qtx.DeleteListeningHistoryByAnonID(r.Context(), anonId); err != nil {
-			internal.WriteServerError(w, err)
+			internal.ServerError(w, err)
 			return
 		}
 		track, err = qtx.GetRandomTrack(r.Context())
 		if err != nil {
-			internal.WriteServerError(w, err)
+			internal.ServerError(w, err)
 			return
 		}
 		if err := tx.Commit(r.Context()); err != nil {
-			internal.WriteServerError(w, err)
+			internal.ServerError(w, err)
 			return
 		}
 	}
@@ -63,7 +67,7 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 		},
 	)
 	if err != nil {
-		internal.WriteServerError(w, err)
+		internal.ServerError(w, err)
 		return
 	}
 	json.NewEncoder(w).Encode(track)
