@@ -91,7 +91,7 @@ func WrapErr(base BaseError) func(err error) BaseError {
 // so if you write 917 err != nil blocks, you can save enough characters to write the magna carta
 //
 // considering how `GetRandomTrack`, a function with 60 line of code is containing 6 calls to this function
-// i am pretty sure you can hit that 1204 soon enough.
+// i am pretty sure you can hit that 917 soon enough.
 //
 // fun to read threads while contemplating the life choices that led to writing golang
 // https://www.reddit.com/r/programmingcirclejerk/comments/1giuuxu/go_really_blew_me_away_with_its_explicit_error/
