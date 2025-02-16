@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"strafe/internal"
 	"strings"
 
 	"github.com/fatih/color"
@@ -11,52 +12,32 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	STRAFE_CONFIG_LOC_ENV = "STRAFE_CFG"
-	CREDENTIALS_USERNAME  = "credentials.username"
-	CREDENTIALS_PASSWORD  = "credentials.password"
-	DOCKER_IMAGE_NAME     = "docker.image.name"
-	DOCKER_IMAGE_TAG      = "docker.image.tag"
-	DOCKER_SOCKET         = "docker.socket"
-	DB_PATH               = "db.path"
-)
-
-const (
-	DOCKER_IMAGE_NAME_DEFAULT = "strafe"
-	DOCKER_IMAGE_TAG_DEFAULT  = "latest"
-)
-
 var (
 	sectionColor = color.New(color.FgBlue, color.Bold)
 	keyColor     = color.New(color.FgCyan)
 	valueColor   = color.New(color.FgGreen)
 	secretColor  = color.New(color.FgYellow)
 )
-
-type ContextKey string
-
-const (
-	APP_CONTEXT_KEY ContextKey = "strafe_ctx.app"
-)
-
 var (
 	PrintSensitiveCFGVars bool
-	verbosity             int
 	configCmd             = &cobra.Command{
 		Use:   "cfg",
 		Short: "print config variables and exit",
 		Run: func(cmd *cobra.Command, args []string) {
 			log.WithFields(log.Fields{
-				"username_set": viper.IsSet(CREDENTIALS_USERNAME),
-				"password_set": viper.IsSet(CREDENTIALS_PASSWORD),
+				"username_set": viper.IsSet(internal.CREDENTIALS_USERNAME),
+				"password_set": viper.IsSet(internal.CREDENTIALS_PASSWORD),
 			}).Debug("uploader settings")
 			log.WithFields(log.Fields{
-				"image_name_set": viper.IsSet(DOCKER_IMAGE_NAME),
-				"image_tag_set":  viper.IsSet(DOCKER_IMAGE_TAG),
-				"socket_set":     viper.IsSet(DOCKER_SOCKET),
+				"image_name_set": viper.IsSet(internal.DOCKER_IMAGE_NAME),
+				"image_tag_set":  viper.IsSet(internal.DOCKER_IMAGE_TAG),
+				"socket_set":     viper.IsSet(internal.DOCKER_SOCKET),
 			}).Debug("docker settings")
+			log.WithFields(log.Fields{
+				"url_set": viper.IsSet(internal.DB_URL),
+			}).Debug("database settings")
 			table := tablewriter.NewWriter(os.Stdout)
-			table.SetHeader([]string{"Section", "Key", "Value", "Status"})
+			table.SetHeader([]string{"Section", "Key", "Value"})
 			table.SetAutoWrapText(false)
 			table.SetAutoFormatHeaders(true)
 			table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
@@ -64,10 +45,7 @@ var (
 			table.SetBorder(true)
 			table.SetRowLine(true)
 
-			checkmark := color.GreenString("✓")
-			warning := color.YellowString("!")
-
-			password := viper.GetString(CREDENTIALS_PASSWORD)
+			password := viper.GetString(internal.CREDENTIALS_PASSWORD)
 			if !PrintSensitiveCFGVars {
 				password = strings.Repeat("*", len(password))
 			}
@@ -76,34 +54,39 @@ var (
 			table.Append([]string{
 				section,
 				keyColor.Sprint("Username"),
-				valueColor.Sprint(viper.GetString(CREDENTIALS_USERNAME)),
-				checkmark,
+				valueColor.Sprint(viper.GetString(internal.CREDENTIALS_USERNAME)),
 			})
 			table.Append([]string{
 				"",
 				keyColor.Sprint("Password"),
 				secretColor.Sprint(password),
-				warning,
 			})
 
 			section = sectionColor.Sprint("Docker")
 			table.Append([]string{
 				section,
 				keyColor.Sprint("Image Name"),
-				valueColor.Sprint(viper.GetString(DOCKER_IMAGE_NAME)),
-				checkmark,
+				valueColor.Sprint(viper.GetString(internal.DOCKER_IMAGE_NAME)),
 			})
 			table.Append([]string{
 				"",
 				keyColor.Sprint("Image Tag"),
-				valueColor.Sprint(viper.GetString(DOCKER_IMAGE_TAG)),
-				checkmark,
+				valueColor.Sprint(viper.GetString(internal.DOCKER_IMAGE_TAG)),
 			})
 			table.Append([]string{
 				"",
 				keyColor.Sprint("Socket"),
-				valueColor.Sprint(viper.GetString(DOCKER_SOCKET)),
-				checkmark,
+				valueColor.Sprint(viper.GetString(internal.DOCKER_SOCKET)),
+			})
+			section = sectionColor.Sprint("Database")
+			db_url := viper.GetString(internal.DB_URL)
+			if !PrintSensitiveCFGVars {
+				db_url = strings.Repeat("*", len(db_url))
+			}
+			table.Append([]string{
+				section,
+				keyColor.Sprint("URL"),
+				valueColor.Sprint(db_url),
 			})
 			table.Render()
 		},
@@ -111,9 +94,10 @@ var (
 )
 
 func getConfigCmd() *cobra.Command {
-	configCmd.PersistentFlags().BoolVar(
+	configCmd.PersistentFlags().BoolVarP(
 		&PrintSensitiveCFGVars,
 		"sensitive",
+		"s",
 		false,
 		"print sensitive configuration variables such as password, set to false by default",
 	)

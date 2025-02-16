@@ -1,0 +1,10 @@
+credentials:
+  username:
+  password:
+docker:
+  image:
+    name:
+    tag:
+  socket:
+db:
+  url: postgres://user:password@ip:port/db?sslmode=disable

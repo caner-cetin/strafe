@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strafe/internal"
 	"strings"
 	"time"
 
@@ -60,17 +61,17 @@ use --force / -F flag to override this behaviour and build the image anyways.
 logs will be streamed by default just like the normal image building process, use --quiet / -Q to shut me up
 
 this process may take a while.`,
-		Run: buildImage,
+		Run: internal.WrapCommandWithResources(buildImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
 	}
 	removeImageCmd = &cobra.Command{
 		Use:   "remove",
 		Short: "remove the image",
-		Run:   wrapCommandWithContext(removeImage),
+		Run:   internal.WrapCommandWithResources(removeImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
 	}
 	healthImageCmd = &cobra.Command{
 		Use:   "health",
 		Short: "check health of utilities inside the image",
-		Run:   wrapCommandWithContext(healthImage),
+		Run:   internal.WrapCommandWithResources(healthImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
 	}
 )
 
@@ -93,22 +94,14 @@ func getDockerRootCmd() *cobra.Command {
 	return dockerRootCmd
 }
 
-func newDockerClient() *client.Client {
-	os.Setenv(client.DefaultDockerHost, viper.GetString(DOCKER_SOCKET))
-	docker, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	cobra.CheckErr(err)
-	return docker
-}
-
 func getImageTag() string {
-	return fmt.Sprintf("%s:%s", viper.GetString(DOCKER_IMAGE_NAME), viper.GetString(DOCKER_IMAGE_TAG))
+	return fmt.Sprintf("%s:%s", viper.GetString(internal.DOCKER_IMAGE_NAME), viper.GetString(internal.DOCKER_IMAGE_TAG))
 }
 
-func imageExists() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+func imageExists(docker *client.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(internal.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	docker := newDockerClient()
-	_, _, err := docker.ImageInspectWithRaw(ctx, viper.GetString(DOCKER_IMAGE_NAME))
+	_, _, err := docker.ImageInspectWithRaw(ctx, viper.GetString(internal.DOCKER_IMAGE_NAME))
 	return err
 }
 
@@ -120,7 +113,9 @@ const (
 )
 
 func exitIfImage(condition ImageCheckCondition) {
-	err := imageExists()
+	docker := internal.NewDockerClient()
+	defer docker.Close()
+	err := imageExists(docker)
 	switch condition {
 	case Exists:
 		if err == nil {
@@ -149,12 +144,11 @@ func buildImage(cmd *cobra.Command, args []string) {
 	s.Prefix = "Building image "
 	s.Start()
 	defer s.Stop()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(TimeoutMS)*time.Millisecond)
-	defer cancel()
-	docker := newDockerClient()
+	ctx := cmd.Context()
+	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 	buildCtx, err := createBuildContext(SourceFolder)
 	cobra.CheckErr(err)
-	response, err := docker.ImageBuild(ctx, buildCtx, types.ImageBuildOptions{
+	response, err := app.Docker.ImageBuild(ctx, buildCtx, types.ImageBuildOptions{
 		Tags: []string{getImageTag()},
 	})
 	cobra.CheckErr(err)
@@ -188,10 +182,9 @@ func buildImage(cmd *cobra.Command, args []string) {
 	}
 }
 
-func getImageInfo() image.Summary {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*10)
+func getImageInfo(docker *client.Client) image.Summary {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(internal.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	docker := newDockerClient()
 	filters := filters.NewArgs()
 	filters.Add("reference", getImageTag())
 	images, err := docker.ImageList(ctx, image.ListOptions{
@@ -217,9 +210,9 @@ func removeImage(cmd *cobra.Command, args []string) {
 		}
 	}
 	ctx := cmd.Context()
-	app := ctx.Value(APP_CONTEXT_KEY).(AppCtx)
+	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 	docker := app.Docker
-	resp, err := docker.ImageRemove(ctx, getImageInfo().ID, image.RemoveOptions{Force: true})
+	resp, err := docker.ImageRemove(ctx, getImageInfo(docker).ID, image.RemoveOptions{Force: true})
 	cobra.CheckErr(err)
 	color.Green("image %s removed successfully", resp[0].Untagged)
 }
@@ -254,7 +247,7 @@ func startContainer(ctx context.Context, resp *container.CreateResponse, id *str
 
 func healthImage(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
-	app := ctx.Value(APP_CONTEXT_KEY).(AppCtx)
+	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 	docker := app.Docker
 	exitIfImage(DoesNotExist)
 	log.Info("checking if exiftool works...")
@@ -308,9 +301,6 @@ echo "ffprobe version: $(ffprobe -version)"
 		log.Infof("healthcheck:\n%s", string(outBytes))
 	}
 	color.Green("image is built and healthy!")
-	if verbosity == 0 {
-		color.Cyan("use -v flag for more detailed output")
-	}
 }
 
 func createBuildContext(contextPath string) (*bytes.Buffer, error) {

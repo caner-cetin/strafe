@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
+	"strafe/internal"
 	"strings"
 	"time"
 
@@ -31,7 +31,7 @@ var (
 		Short: "calculate waveform peaks of given audio path",
 		Long: `calculates waveform peaks of given audio path
 .mp3, .wav, .flac, .ogg, .oga, .opus, .dat and .json formats are supported`,
-		Run: calculateWaveform,
+		Run: internal.WrapCommandWithResources(calculateWaveform, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
 	}
 	waveformPixelsPerSecond int32
 )
@@ -49,9 +49,8 @@ func calculateWaveform(cmd *cobra.Command, args []string) {
 	s.Prefix = "initializing "
 	s.Start()
 	defer s.Stop()
-	docker := newDockerClient()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(TimeoutMS))
-	defer cancel()
+	ctx := cmd.Context()
+	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 	hostOutput, err := createTempFile("json")
 	check(err)
 	containerOutput, err := createTempFile("json")
@@ -66,7 +65,7 @@ func calculateWaveform(cmd *cobra.Command, args []string) {
 	check(err)
 	log.Infof("creating container")
 	s.Prefix = "creating container "
-	resp, err := docker.ContainerCreate(
+	resp, err := app.Docker.ContainerCreate(
 		ctx,
 		&container.Config{
 			Image:        getImageTag(),
@@ -93,18 +92,18 @@ func calculateWaveform(cmd *cobra.Command, args []string) {
 		nil,
 		"")
 	check(err)
-	defer removeContainer(ctx, &resp, nil, docker)
+	defer removeContainer(ctx, &resp, nil, app.Docker)
 	log.Infof("starting container")
 	s.Prefix = "starting container"
-	startContainer(ctx, &resp, nil, docker)
+	startContainer(ctx, &resp, nil, app.Docker)
 	s.Prefix = "waiting for container to finish"
-	statusCh, errCh := docker.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	statusCh, errCh := app.Docker.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
 		check(err)
 	case <-statusCh:
 		s.Prefix = "audiowaveform executed successfully "
-		out, err := docker.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
+		out, err := app.Docker.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
 		check(err)
 		outBytes, err := io.ReadAll(out)
 		check(err)
