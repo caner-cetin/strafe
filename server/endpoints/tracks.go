@@ -4,13 +4,38 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strafe/db"
 	"strafe/internal"
+	"strconv"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/valyala/fastjson"
 )
+
+type Track struct {
+	ID                          string    `json:"id"`
+	Cover                       string    `json:"cover"`
+	Info                        TrackInfo `json:"info"`
+	SavedVocalFolderPath        string    `json:"saved_vocal_folder_path"`
+	SavedInstrumentalFolderPath string    `json:"saved_instrumental_folder_path"`
+}
+
+type TrackInfo struct {
+	Title                string      `json:"title"`
+	Artist               string      `json:"artist"`
+	Album                string      `json:"album"`
+	Length               float64     `json:"length"`
+	Genre                string      `json:"genre"`
+	VocalWaveform        interface{} `json:"vocal_waveform"`
+	InstrumentalWaveform interface{} `json:"instrumental_waveform"`
+	Tempo                float64     `json:"tempo"`
+	Instrumental         bool        `json:"instrumental"`
+	Key                  string      `json:"key"`
+}
 
 type GetRandomTrackRequest struct {
 	AnonID string `json:"anonId"`
@@ -71,4 +96,94 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	json.NewEncoder(w).Encode(track)
+}
+
+func GetTrack(w http.ResponseWriter, r *http.Request) {
+	var trackId = chi.URLParam(r, "trackId")
+	app := r.Context().Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
+	track, err := app.DB.GetTrackBasicByID(r.Context(), trackId)
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
+	track_info := processTrackInfo(w, track)
+	if track_info == nil {
+		return
+	}
+	waveforms, err := app.DB.GetTrackWaveforms(r.Context(), trackId)
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
+	album, err := app.DB.GetAlbumById(r.Context(), track.AlbumID.String)
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
+	var response Track
+	response.Cover = fmt.Sprintf("%s/cover.jpg", album.Name.String)
+	response.ID = track.ID
+	response.Info = *track_info
+	var instrumentalWf []int32
+	if err = internal.DecompressJSON(waveforms.InstrumentalWaveform, &instrumentalWf); err != nil {
+		internal.ServerError(w, err)
+		return
+	}
+	response.Info.InstrumentalWaveform = instrumentalWf
+	if !track.Instrumental.Bool {
+		var vocalWf []int32
+		if err = internal.DecompressJSON(waveforms.VocalWaveform, &vocalWf); err != nil {
+			internal.ServerError(w, err)
+			return
+		}
+		response.Info.VocalWaveform = vocalWf
+	}
+	response.SavedVocalFolderPath = track.VocalFolderPath.String
+	response.SavedInstrumentalFolderPath = track.InstrumentalFolderPath.String
+
+	json.NewEncoder(w).Encode(response)
+}
+
+func processTrackInfo(w http.ResponseWriter, track db.GetTrackBasicByIDRow) *TrackInfo {
+	trackInfo, err := fastjson.ParseBytes(track.Info)
+	if err != nil {
+		internal.ServerError(w, err)
+		return nil
+	}
+
+	getString := func(key string) string {
+		val := trackInfo.Get(key)
+		if val == nil {
+			return ""
+		}
+		str, err := strconv.Unquote(string(val.MarshalTo(nil)))
+		if err != nil {
+			internal.ServerError(w, err)
+			return ""
+		}
+		return str
+	}
+
+	length, err := track.TotalDuration.Float64Value()
+	if err != nil {
+		internal.ServerError(w, err)
+		return nil
+	}
+
+	tempo, err := track.Tempo.Float64Value()
+	if err != nil {
+		internal.ServerError(w, err)
+		return nil
+	}
+
+	return &TrackInfo{
+		Artist:       getString("Artist"),
+		Album:        getString("Album"),
+		Genre:        getString("Genre"),
+		Title:        getString("Title"),
+		Length:       length.Float64,
+		Tempo:        tempo.Float64,
+		Key:          track.Key.String,
+		Instrumental: track.Instrumental.Bool,
+	}
 }

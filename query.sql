@@ -130,3 +130,8 @@ LIMIT 1;
 -- name: RecordListeningHistory :exec
 INSERT INTO listening_histories (track_id, anon_id, listened_at)
 VALUES ($1, $2, $3);
+
+-- name: GetAlbumById :one
+SELECT a.*
+FROM albums a
+WHERE a.id = $1;

@@ -22,6 +22,19 @@ func (q *Queries) DeleteListeningHistoryByAnonID(ctx context.Context, anonID pgt
 	return err
 }
 
+const getAlbumById = `-- name: GetAlbumById :one
+SELECT a.id, a.name, a.cover_extension
+FROM albums a
+WHERE a.id = $1
+`
+
+func (q *Queries) GetAlbumById(ctx context.Context, id string) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumById, id)
+	var i Album
+	err := row.Scan(&i.ID, &i.Name, &i.CoverExtension)
+	return i, err
+}
+
 const getRandomTrack = `-- name: GetRandomTrack :one
 SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.vocal_waveform, t.instrumental_waveform, t.info, t.instrumental, t.tempo, t.key
 FROM tracks t

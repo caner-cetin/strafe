@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"runtime"
+	"strings"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,8 +40,13 @@ var (
 )
 
 func WriteError(w http.ResponseWriter, err BaseError) {
-	pc, file, no, ok := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
+	var pc, file, no, ok = runtime.Caller(1)
+	var details = runtime.FuncForPC(pc)
+	if strings.Contains(strings.ToLower(details.Name()), "servererror") {
+		// then caller is the internal.ServerError, we need to skip two
+		pc, file, no, ok = runtime.Caller(2)
+		details = runtime.FuncForPC(pc)
+	}
 	var entry = log.NewEntry(log.StandardLogger())
 	fields := make(log.Fields)
 	fields["message"] = err.Message
@@ -84,6 +90,27 @@ func WrapErr(base BaseError) func(err error) BaseError {
 //	internal.ServerError(w, err) // 28 characters
 //
 // to save 21 characters
+//
+// you cant shave off the extra unnecessary `return `line.
+// so we are currently doing this:
+//
+//	if err != nil {
+//		internal.ServerError(w, err)
+//		return
+//	}
+//
+// and you cannot do this:
+//
+//	if err != nil {
+//		return internal.ServerError(w, err)
+//	}
+//
+// because for returning from a function, that function also needs to return *something*
+//
+// https://pkg.go.dev/golang.org/x/tools/internal/typesinternal#TooManyValues
+//
+// a simple *return* from this function wont suffice, for doing `return ...` from the main function, the wrapper needs to return *something*
+// and when wrapper returns something, main function returns that same thing, as we are calling this from handlers, handlers cannot return anything.
 //
 // magna carta, or more accurately, this pdf is https://www.archives.gov/files/press/press-kits/magna-carta/magna-carta-translation.pdf
 // 19270 characters long

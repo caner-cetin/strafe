@@ -50,8 +50,9 @@ func runServer(command *cobra.Command, args []string) {
 	}))
 
 	r.Get("/health", endpoints.Health)
-	r.Route("/track", func(tracks chi.Router) {
-		tracks.Get("/random", endpoints.GetRandomTrack)
+	r.Route("/track", func(track chi.Router) {
+		track.Post("/random", endpoints.GetRandomTrack)
+		track.Get("/{trackId}", endpoints.GetTrack)
 	})
 	if port == 0 {
 		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
