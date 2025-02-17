@@ -10,12 +10,12 @@ CREATE TABLE public.tracks (
 	instrumental_folder_path text NULL,
 	album_id text NULL,
 	total_duration numeric NULL,
-	vocal_waveform BYTEA NULL,
-	instrumental_waveform BYTEA NULL,
 	info jsonb NULL,
 	instrumental bool NULL,
 	tempo numeric NULL,
 	"key" text NULL,
+	vocal_waveform BYTEA NULL,
+	instrumental_waveform BYTEA NULL,
 	CONSTRAINT tracks_pkey PRIMARY KEY (id)
 );
 CREATE INDEX idx_tracks_artist ON public.tracks ("(info ->> 'Artist'::text)");

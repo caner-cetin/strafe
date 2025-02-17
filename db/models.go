@@ -26,10 +26,10 @@ type Track struct {
 	InstrumentalFolderPath pgtype.Text
 	AlbumID                pgtype.Text
 	TotalDuration          pgtype.Numeric
-	VocalWaveform          []byte
-	InstrumentalWaveform   []byte
 	Info                   []byte
 	Instrumental           pgtype.Bool
 	Tempo                  pgtype.Numeric
 	Key                    pgtype.Text
+	VocalWaveform          []byte
+	InstrumentalWaveform   []byte
 }

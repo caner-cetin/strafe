@@ -36,7 +36,7 @@ func (q *Queries) GetAlbumById(ctx context.Context, id string) (Album, error) {
 }
 
 const getRandomTrack = `-- name: GetRandomTrack :one
-SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.vocal_waveform, t.instrumental_waveform, t.info, t.instrumental, t.tempo, t.key
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
 FROM tracks t
 LEFT JOIN albums a ON a.id = t.album_id
 ORDER BY RANDOM()
@@ -53,18 +53,18 @@ func (q *Queries) GetRandomTrack(ctx context.Context) (Track, error) {
 		&i.InstrumentalFolderPath,
 		&i.AlbumID,
 		&i.TotalDuration,
-		&i.VocalWaveform,
-		&i.InstrumentalWaveform,
 		&i.Info,
 		&i.Instrumental,
 		&i.Tempo,
 		&i.Key,
+		&i.VocalWaveform,
+		&i.InstrumentalWaveform,
 	)
 	return i, err
 }
 
 const getRandomUnlistenedTrack = `-- name: GetRandomUnlistenedTrack :one
-SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.vocal_waveform, t.instrumental_waveform, t.info, t.instrumental, t.tempo, t.key
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
 FROM tracks t
 LEFT JOIN albums a ON a.id = t.album_id
 LEFT JOIN listening_histories lh ON t.id = lh.track_id AND lh.anon_id = $1
@@ -83,12 +83,12 @@ func (q *Queries) GetRandomUnlistenedTrack(ctx context.Context, anonID pgtype.Te
 		&i.InstrumentalFolderPath,
 		&i.AlbumID,
 		&i.TotalDuration,
-		&i.VocalWaveform,
-		&i.InstrumentalWaveform,
 		&i.Info,
 		&i.Instrumental,
 		&i.Tempo,
 		&i.Key,
+		&i.VocalWaveform,
+		&i.InstrumentalWaveform,
 	)
 	return i, err
 }
@@ -134,6 +134,32 @@ func (q *Queries) GetTrackBasicByID(ctx context.Context, id string) (GetTrackBas
 		&i.Instrumental,
 		&i.Tempo,
 		&i.Key,
+	)
+	return i, err
+}
+
+const getTrackByID = `-- name: GetTrackByID :one
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
+FROM tracks t
+WHERE t.id = $1
+`
+
+// Get track by ID (all columns, use GetTrackBasicByID if waveforms are not needed)
+func (q *Queries) GetTrackByID(ctx context.Context, id string) (Track, error) {
+	row := q.db.QueryRow(ctx, getTrackByID, id)
+	var i Track
+	err := row.Scan(
+		&i.ID,
+		&i.VocalFolderPath,
+		&i.InstrumentalFolderPath,
+		&i.AlbumID,
+		&i.TotalDuration,
+		&i.Info,
+		&i.Instrumental,
+		&i.Tempo,
+		&i.Key,
+		&i.VocalWaveform,
+		&i.InstrumentalWaveform,
 	)
 	return i, err
 }

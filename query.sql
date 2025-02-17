@@ -135,3 +135,9 @@ VALUES ($1, $2, $3);
 SELECT a.*
 FROM albums a
 WHERE a.id = $1;
+
+-- name: GetTrackByID :one
+-- Get track by ID (all columns, use GetTrackBasicByID if waveforms are not needed)
+SELECT t.*
+FROM tracks t
+WHERE t.id = $1;
