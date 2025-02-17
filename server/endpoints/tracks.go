@@ -99,7 +99,6 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 	if response != nil {
 		json.NewEncoder(w).Encode(response)
 	}
-	json.NewEncoder(w).Encode(track)
 }
 
 func GetTrack(w http.ResponseWriter, r *http.Request) {

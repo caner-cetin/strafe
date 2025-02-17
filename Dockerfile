@@ -41,6 +41,8 @@ RUN wget  https://exiftool.org/Image-ExifTool-13.19.tar.gz && \
   cd Image-ExifTool-13.19 && \
   perl Makefile.PL && \
   make install
+RUN apt-get install -y curl python3-dev
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 RUN rm -rf /tmp/
 RUN mkdir -p /app/
 WORKDIR /app/

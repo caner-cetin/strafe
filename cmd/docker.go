@@ -348,7 +348,7 @@ func createBuildContext(contextPath string) (*bytes.Buffer, error) {
 func createTempFile(ext string) (*os.File, error) {
 	baseDir := os.TempDir()
 	timestamp := time.Now().UnixNano()
-	filename := fmt.Sprintf("strafe_waveform_%d.%s", timestamp, ext)
+	filename := fmt.Sprintf("strafe_tmp_%d.%s", timestamp, ext)
 	filepath := filepath.Join(baseDir, filename)
 	file, err := os.Create(filepath)
 	if err != nil {
