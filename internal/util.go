@@ -108,34 +108,30 @@ func InitConfig() {
 
 	viper.AutomaticEnv() // read in environment variables that match
 
+	// set defaults first
+	viper.SetDefault(DOCKER_IMAGE_NAME, DOCKER_IMAGE_NAME_DEFAULT)
+	viper.SetDefault(DOCKER_IMAGE_TAG, DOCKER_IMAGE_TAG_DEFAULT)
+	viper.SetDefault(DISPLAY_ASCII_ART_ON_HELP, true)
+
+
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		InitLogging()
 		log.Debugf("using config file: %s", viper.ConfigFileUsed())
-		setDefaultConfigs()
+		switch Verbosity {
+		case 1:
+			log.SetLevel(log.InfoLevel)
+		case 2:
+			log.SetLevel(log.DebugLevel)
+		case 3:
+			log.SetLevel(log.TraceLevel)
+		default:
+			log.SetLevel(log.WarnLevel)
+		}
 	} else {
 		fmt.Printf("Error: cannot load config file: %v\n", err)
 		os.Exit(1)
 	}
 }
-func InitLogging() {
-	switch Verbosity {
-	case 1:
-		log.SetLevel(log.InfoLevel)
-	case 2:
-		log.SetLevel(log.DebugLevel)
-	case 3:
-		log.SetLevel(log.TraceLevel)
-	default:
-		log.SetLevel(log.WarnLevel)
-	}
-}
-
-func setDefaultConfigs() {
-	viper.SetDefault(DOCKER_IMAGE_NAME, DOCKER_IMAGE_NAME_DEFAULT)
-	viper.SetDefault(DOCKER_IMAGE_TAG, DOCKER_IMAGE_TAG_DEFAULT)
-}
-
 func initializeDB(ctx context.Context, appCtx *AppCtx) error {
 	if !viper.IsSet(DB_URL) {
 		log.Warn("database url is not set")

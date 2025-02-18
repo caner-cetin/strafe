@@ -53,6 +53,3 @@ package: build
     
     zip {{name}}-windows-amd64.zip {{name}}-windows-amd64.exe
     zip {{name}}-windows-arm64.zip {{name}}-windows-arm64.exe
-
-docker:
-    docker build -t {{name}}:{{version}} .

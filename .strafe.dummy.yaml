@@ -3,8 +3,11 @@ credentials:
   password:
 docker:
   image:
-    name:
-    tag:
-  socket:
+    name: strafe
+    tag: latest
+  socket: unix:///var/run/docker.sock
 db:
   url: postgres://user:password@ip:port/db?sslmode=disable
+# random ascii art will be printed when help message is displayed
+# no nsfw art, trust me.
+display_ascii_art_on_help: true

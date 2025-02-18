@@ -46,4 +46,22 @@ just build
 # ├── strafe-linux-arm64
 # ├── strafe-windows-amd64.exe
 # └── strafe-windows-arm64.exe
+#
+# if you want to do above but package 
+just package
+# will yield
+# dist
+# ├── strafe-darwin-amd64
+# ├── strafe-darwin-amd64.tar.gz
+# ├── strafe-darwin-arm64
+# ├── strafe-darwin-arm64.tar.gz
+# ├── strafe-linux-amd64
+# ├── strafe-linux-amd64.tar.gz
+# ├── strafe-linux-arm64
+# ├── strafe-linux-arm64.tar.gz
+# ├── strafe-windows-amd64.exe
+# ├── strafe-windows-amd64.zip
+# ├── strafe-windows-arm64.exe
+# └── strafe-windows-arm64.zip
+# deflates around 60-70%
 ```

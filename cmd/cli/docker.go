@@ -84,9 +84,9 @@ var (
 
 func getDockerRootCmd() *cobra.Command {
 	imageRootCmd.AddCommand(imageExistsCmd)
-	buildImageCmd.PersistentFlags().StringVarP(&SourceFolder, "dir", "D", ".", "source code folder")
-	buildImageCmd.PersistentFlags().BoolVarP(&ForceBuildImage, "force", "F", false, "build image even if it exists")
-	buildImageCmd.PersistentFlags().BoolVarP(&DisableBuildLogs, "quiet", "Q", false, "no log stream")
+	buildImageCmd.PersistentFlags().StringVarP(&SourceFolder, "dir", "d", ".", "source code folder")
+	buildImageCmd.PersistentFlags().BoolVarP(&ForceBuildImage, "force", "f", false, "build image even if it exists")
+	buildImageCmd.PersistentFlags().BoolVarP(&DisableBuildLogs, "quiet", "q", false, "no log stream")
 	imageRootCmd.AddCommand(buildImageCmd)
 	imageRootCmd.AddCommand(removeImageCmd)
 	imageRootCmd.AddCommand(healthImageCmd)
