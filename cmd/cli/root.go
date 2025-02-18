@@ -31,7 +31,7 @@ func Execute() {
 var ()
 
 func init() {
-	cobra.OnInitialize(internal.InitConfig)
+	internal.InitConfig()
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -51,12 +51,10 @@ func init() {
 	rootCmd.AddCommand(server.GetRunCmd())
 }
 
-
 func modifyHelp(fn func(cmd *cobra.Command, args []string)) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		if viper.GetBool(internal.DISPLAY_ASCII_ART_ON_HELP) {
 			fmt.Println(arts[rand.IntN(len(arts))])
-
 		}
 		fn(cmd, args)
 	}
@@ -309,7 +307,7 @@ var arts = []string{
 ⣿⣶⣦⣤⣤⣤⣤⣤⣄⣀⣀⣀⣈⣉⣉⡉⠉⠉⠉⠉⠛⠛⠛⠛⠛⠚⠓⠒⠒⠶⠖⠲⠦⠰⠶⠰⠂⠉⠉⠉⠛⠛⠓⠛⠛⠁⠀⣉⣁⣀⣀⣀⣀⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣤⣼
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣶⣶⣤⣤⣤⣤⣤⣤⣴⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
 `,
-`
+	`
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢋⠉⠉⢙⣟⣋⣭⣙⡛⡛⡛⠛⣿⣿⣟⣛⣻⢛⣛⣛⣟⣛⣿⣿⡟⢛⣻⣿⣻⡛⢛⢿⡹⢍⣛⣛⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⢠⠀⠀⢈⠳⠾⠙⠀⡆⠇⢱⠘⠀⠈⠇⡆⡆⡁⠲⢈⠺⡆⣿⣿⡅⠀⠃⠀⠁⢰⠀⠀⡆⠈⠰⠀⣿⣿⣿
 ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠍⡀⠀⠉⡉⡉⠈⠁⠀⠀⠉⠉⠉⠉⠉⠩⣭⣤⣬⣿⣿⣯⣭⣽⣾⣿⣾⣿⣿⣷⣾⣿⣿⣷⣾⣿⣿⣿

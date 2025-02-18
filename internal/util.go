@@ -108,15 +108,14 @@ func InitConfig() {
 
 	viper.AutomaticEnv() // read in environment variables that match
 
-	// set defaults first
-	viper.SetDefault(DOCKER_IMAGE_NAME, DOCKER_IMAGE_NAME_DEFAULT)
-	viper.SetDefault(DOCKER_IMAGE_TAG, DOCKER_IMAGE_TAG_DEFAULT)
-	viper.SetDefault(DISPLAY_ASCII_ART_ON_HELP, true)
-
-
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		log.Debugf("using config file: %s", viper.ConfigFileUsed())
+
+		viper.SetDefault(DOCKER_IMAGE_NAME, DOCKER_IMAGE_NAME_DEFAULT)
+		viper.SetDefault(DOCKER_IMAGE_TAG, DOCKER_IMAGE_TAG_DEFAULT)
+		viper.SetDefault(DISPLAY_ASCII_ART_ON_HELP, true)
+
 		switch Verbosity {
 		case 1:
 			log.SetLevel(log.InfoLevel)
