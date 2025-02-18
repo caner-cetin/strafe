@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strafe/internal"
-	"strafe/server/endpoints"
+	"strafe/pkg/server/endpoints"
 
 	log "github.com/sirupsen/logrus"
 

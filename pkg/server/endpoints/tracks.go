@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strafe/db"
 	"strafe/internal"
+	"strafe/pkg/db"
 	"strconv"
 	"time"
 
@@ -83,6 +83,7 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	streamTrackInfo(w, track, app, r)
 	err = app.DB.RecordListeningHistory(
 		r.Context(),
 		db.RecordListeningHistoryParams{
@@ -95,10 +96,6 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 		internal.ServerError(w, err)
 		return
 	}
-	response := processTrackInfo(w, track, app, r)
-	if response != nil {
-		json.NewEncoder(w).Encode(response)
-	}
 }
 
 func GetTrack(w http.ResponseWriter, r *http.Request) {
@@ -109,18 +106,15 @@ func GetTrack(w http.ResponseWriter, r *http.Request) {
 		internal.ServerError(w, err)
 		return
 	}
-	response := processTrackInfo(w, track, app, r)
-	if response != nil {
-		json.NewEncoder(w).Encode(response)
-	}
+	streamTrackInfo(w, track, app, r)
 }
 
-func processTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx, r *http.Request) *Track {
+func streamTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx, r *http.Request) {
 	var response Track
 	album, err := app.DB.GetAlbumById(r.Context(), track.AlbumID.String)
 	if err != nil {
 		internal.ServerError(w, err)
-		return nil
+		return
 	}
 	response.Cover = fmt.Sprintf("%s/cover.jpg", album.Name.String)
 	response.ID = track.ID
@@ -131,7 +125,7 @@ func processTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx
 	trackInfo, err := fastjson.ParseBytes(track.Info)
 	if err != nil {
 		internal.ServerError(w, err)
-		return nil
+		return
 	}
 
 	getString := func(key string) string {
@@ -150,13 +144,13 @@ func processTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx
 	length, err := track.TotalDuration.Float64Value()
 	if err != nil {
 		internal.ServerError(w, err)
-		return nil
+		return
 	}
 
 	tempo, err := track.Tempo.Float64Value()
 	if err != nil {
 		internal.ServerError(w, err)
-		return nil
+		return
 	}
 
 	response.Info = TrackInfo{
@@ -173,17 +167,18 @@ func processTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx
 	var instrumentalWf []int32
 	if err = internal.DecompressJSON(track.InstrumentalWaveform, &instrumentalWf); err != nil {
 		internal.ServerError(w, err)
-		return nil
+		return
 	}
 	response.Info.InstrumentalWaveform = instrumentalWf
 	if !track.Instrumental.Bool {
 		var vocalWf []int32
 		if err = internal.DecompressJSON(track.VocalWaveform, &vocalWf); err != nil {
 			internal.ServerError(w, err)
-			return nil
+			return
 		}
 		response.Info.VocalWaveform = vocalWf
 	}
 
-	return &response
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }

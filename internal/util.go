@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strafe/db"
+	"strafe/pkg/db"
 	"time"
 
 	"github.com/docker/docker/client"

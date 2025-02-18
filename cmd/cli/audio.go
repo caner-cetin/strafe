@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"bufio"
@@ -33,6 +33,7 @@ var (
 		Long:  `processes and uploads audio file given with -a / --audio flag`,
 		Run:   internal.WrapCommandWithResources(processAndUploadAudio, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
 	}
+	modelDownloadFolder     string
 	waveformPixelsPerSecond int32
 	modelCheckpointName     string
 	useGPU                  bool
@@ -41,6 +42,7 @@ var (
 func getAudioRootCmd() *cobra.Command {
 	uploadCmd.PersistentFlags().Int32VarP(&waveformPixelsPerSecond, "pps", "P", 100, "waveform zoom level (pixels per second)")
 	uploadCmd.PersistentFlags().StringVar(&modelCheckpointName, "model", "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt", "model name for audio splitter, see https://raw.githubusercontent.com/nomadkaraoke/python-audio-separator/refs/heads/main/audio_separator/models.json for full list")
+	uploadCmd.PersistentFlags().StringVar(&modelDownloadFolder, "model_file_directory", "/tmp/audio-separator-models/", "model download folder / file directory on the host machine")
 	uploadCmd.PersistentFlags().BoolVar(&useGPU, "gpu", false, "use gpu during audio splitter")
 	audioCmd.AddCommand(uploadCmd)
 	audioCmd.PersistentFlags().StringVarP(&audioPath, "audio", "a", "", "path of audio")
@@ -73,18 +75,6 @@ func processAndUploadAudio(cmd *cobra.Command, args []string) {
 	defer os.Remove(targetAudioPath.Name())
 	mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: hostAudioPath, Target: targetAudioPath.Name()})
 
-	audioSplitScript := fmt.Sprintf(`from audio_separator.separator import Separator	
-separator = Separator(output_format="%s")
-separator.load_model("%s")
-separator.separate("%s")
-	`, strings.ToLower(hostAudioPathExt), modelCheckpointName, targetAudioPath.Name())
-	audioSplitScriptFile, err := createTempFile("py")
-	check(err)
-	defer audioSplitScriptFile.Close()
-	defer os.Remove(audioSplitScriptFile.Name())
-	audioSplitScriptFile.WriteString(audioSplitScript)
-	mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: audioSplitScriptFile.Name(), Target: audioSplitScriptFile.Name()})
-
 	hostInstrumentalWaveformOutput, err := createTempFile("json")
 	check(err)
 	defer hostInstrumentalWaveformOutput.Close()
@@ -99,12 +89,13 @@ separator.separate("%s")
 	scriptFile, err := createTempFile("sh")
 	check(err)
 	scripts := []string{fmt.Sprintf("exiftool %s -json > %s", targetAudioPath.Name(), hostExifInfo.Name())}
-	scripts = append(scripts, "$HOME/.local/bin/uv venv")
+	scripts = append(scripts, "uv venv")
 	separatorPkg := "audio-separator[cpu]"
 	if useGPU {
 		separatorPkg = "audio-separator[gpu]"
 	}
-	scripts = append(scripts, fmt.Sprintf("$HOME/.local/bin/uv run --with %s %s", separatorPkg, audioSplitScriptFile.Name()))
+	scripts = append(scripts, fmt.Sprintf("uv pip install %s", separatorPkg))
+	scripts = append(scripts, fmt.Sprintf("audio-separator -m %s --output_format %s", modelCheckpointName, strings.ToUpper(hostAudioPathExt)))
 	// scripts = append(scripts, fmt.Sprintf("audiowaveform -i %s --pixels-per-second %d > %s", targetAudioPath.Name(), waveformPixelsPerSecond, hostVocalWaveformOutput.Name()))
 	_, err = scriptFile.WriteString(strings.Join(scripts, "\n"))
 	check(err)

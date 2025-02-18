@@ -1,9 +1,9 @@
-package cmd
+package cli
 
 import (
 	"os"
 	"strafe/internal"
-	"strafe/server"
+	"strafe/pkg/server"
 	"time"
 
 	"github.com/spf13/cobra"
