@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/valyala/fastjson"
 )
 
@@ -45,14 +46,15 @@ type AudioProcessConfig struct {
 	UseGPU         bool
 	IsInstrumental bool
 	DryRun         bool
+	CoverArtPath   string
 }
 
 var (
 	uploadCmd = &cobra.Command{
 		Use:   "upload -a audio",
 		Short: "processes and uploads audio",
-		Long:  `processes and uploads audio file given with -a / --audio flag`,
-		Run:   WrapCommandWithResources(processAndUploadAudio, ResourceConfig{Resources: []ResourceType{ResourceDocker}}),
+		Long:  `processes and uploads audio file given with -i / --input flag`,
+		Run:   WrapCommandWithResources(processAndUploadAudio, ResourceConfig{Resources: []ResourceType{ResourceDocker, ResourceDatabase, ResourceS3}}),
 	}
 	uploadCfg = AudioProcessConfig{}
 )
@@ -63,10 +65,11 @@ func getAudioRootCmd() *cobra.Command {
 	uploadCmd.PersistentFlags().StringVar(&uploadCfg.ModelDownloadDir, "model_file_directory", "/tmp/audio-separator-models/", "model download folder / file directory on the host machine")
 	uploadCmd.PersistentFlags().StringVar(&uploadCfg.OutputDir, "audio_output_directory", "/tmp/strafe-audio-separator-audio/", "directory to write output files from audio-splitter")
 	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.IsInstrumental, "instrumental", false, "specify if the audio is instrumental")
-	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.UseGPU, "gpu", false, "use gpu during audio splitter")
+	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.UseGPU, "gpu", false, "use gpu during audio separation")
 	uploadCmd.PersistentFlags().BoolVarP(&uploadCfg.DryRun, "dry_run", "D", false, "files and metadata will not be uploaded to S3 and database")
+	uploadCmd.PersistentFlags().StringVarP(&uploadCfg.CoverArtPath, "cover_art", "C", "", "cover art for the track, required")
 	audioCmd.AddCommand(uploadCmd)
-	audioCmd.PersistentFlags().StringVarP(&audioPath, "audio", "a", "", "path of audio")
+	audioCmd.PersistentFlags().StringVarP(&audioPath, "input", "i", "", "path of audio")
 	return audioCmd
 }
 
@@ -110,12 +113,17 @@ type audioProcessor struct {
 		// entrypoint bash script for docker container
 		entrypoint string
 	}
+	info        internal.ExifInfo
+	db_record   db.InsertTrackParams
 	audioFormat string
 	spinner     *spinner.Spinner
 }
 
 func processAndUploadAudio(cmd *cobra.Command, args []string) {
 	exitIfImage(DoesNotExist)
+	if uploadCfg.CoverArtPath == "" {
+		log.Fatal("cover art path is not given")
+	}
 	ctx := cmd.Context()
 	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 
@@ -354,86 +362,99 @@ func (p *audioProcessor) runContainer() (<-chan container.WaitResponse, <-chan e
 }
 
 func (p *audioProcessor) processResults(ctx context.Context) error {
+	exifInfoBytes := p.loadExifInfo()
+	log.Info(color.CyanString(`finished processing %s - %s [%d - %s]`, p.info.Artist, p.info.Title, p.info.Year, p.info.Album))
+
+	if !uploadCfg.DryRun {
+		p.loadWaveforms()
+		p.loadDuration()
+		p.loadKey()
+		p.loadTempo()
+		p.loadAlbumId(ctx)
+		p.db_record.ID = uuid.NewString()
+		p.db_record.Info = exifInfoBytes
+		p.db_record.Instrumental = pgtype.Bool{Bool: uploadCfg.IsInstrumental}
+		p.db_record.AlbumName = pgtype.Text{String: p.info.Album}
+		p.app.CreateBucketIfNotExists(ctx, viper.GetString(internal.S3_BUCKET_NAME))
+		p.app.DB.InsertTrack(ctx, db.InsertTrackParams{
+			VocalFolderPath:        pgtype.Text{String: ""},
+			InstrumentalFolderPath: pgtype.Text{String: ""},
+		})
+	}
+	return nil
+}
+
+func (p *audioProcessor) loadExifInfo() []byte {
 	exifInfoBytes, err := os.ReadFile(p.paths.exif)
 	check(err)
 	var exifInfo internal.ExifInfo
 	if err = json.Unmarshal(fastjson.MustParseBytes(exifInfoBytes).GetArray()[0].GetObject().MarshalTo(nil), &exifInfo); err != nil {
 		check(err)
 	}
+	p.info = exifInfo
+	return exifInfoBytes
+}
 
-	log.Info(color.CyanString(`finished processing %s - %s [%d - %s]`, exifInfo.Artist, exifInfo.Title, exifInfo.Year, exifInfo.Album))
-
-	keyBytes, err := os.ReadFile(p.paths.key)
-	check(err)
-	tempoBytes, err := os.ReadFile(p.paths.tempo)
-	check(err)
-	var tempo pgtype.Numeric
-	if err = tempo.Scan(strings.TrimSpace(strings.Replace(string(tempoBytes), "bpm", "", -1))); err != nil {
-		check(err)
-	}
-	instrumentalSegmentFiles, err := os.ReadDir(p.paths.segments.instrumental)
-	check(err)
-	vocalSegmentFiles, err := os.ReadDir(p.paths.segments.vocal)
-	check(err)
+func (p *audioProcessor) loadWaveforms() {
 	instrumentalWFBytes, err := os.ReadFile(p.paths.waveform.instrumental)
 	check(err)
 	vocalWFBytes, err := os.ReadFile(p.paths.waveform.vocal)
 	check(err)
 	instrumentalWF := fastjson.MustParseBytes(instrumentalWFBytes).GetObject().Get("data").MarshalTo(nil)
 	vocalWF := fastjson.MustParseBytes(vocalWFBytes).GetObject().Get("data").MarshalTo(nil)
-	compressedInstrumentalWF, err := internal.CompressJSON(instrumentalWF)
+	p.db_record.InstrumentalWaveform, err = internal.CompressJSON(instrumentalWF)
 	check(err)
-	compressedVocalWF, err := internal.CompressJSON(vocalWF)
+	p.db_record.VocalWaveform, err = internal.CompressJSON(vocalWF)
 	check(err)
+}
+
+func (p *audioProcessor) loadDuration() {
 	var duration pgtype.Numeric
 	durationBytes, err := os.ReadFile(p.paths.duration)
 	check(err)
 	if err = duration.Scan(strings.TrimSpace(string(durationBytes))); err != nil {
 		check(err)
 	}
-	if !uploadCfg.DryRun {
-		var albumId string
-		tx, err := p.app.Conn.BeginTx(ctx, pgx.TxOptions{})
-		defer tx.Rollback(ctx)
+	p.db_record.TotalDuration = duration
+}
+
+func (p *audioProcessor) loadKey() {
+	keyBytes, err := os.ReadFile(p.paths.key)
+	check(err)
+	p.db_record.Key = pgtype.Text{String: string(keyBytes)}
+}
+
+func (p *audioProcessor) loadTempo() {
+	tempoBytes, err := os.ReadFile(p.paths.tempo)
+	check(err)
+	var tempo pgtype.Numeric
+	if err = tempo.Scan(strings.TrimSpace(strings.Replace(string(tempoBytes), "bpm", "", -1))); err != nil {
 		check(err)
-		qtx := p.app.DB.WithTx(tx)
-		albumId, err = qtx.GetAlbumIDByName(ctx, pgtype.Text{String: exifInfo.Album})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				albumId, err = qtx.InsertAlbum(ctx, db.InsertAlbumParams{
-					ID:    uuid.NewString(),
-					Name:  pgtype.Text{String: exifInfo.Album},
-					Cover: pgtype.Text{String: ""},
-				})
-				check(err)
-			} else {
-				log.Fatal(err)
-			}
-		}
-		err = tx.Commit(ctx)
-		check(err)
-		p.app.DB.InsertTrack(ctx, db.InsertTrackParams{
-			ID:                     uuid.NewString(),
-			VocalFolderPath:        pgtype.Text{String: ""},
-			InstrumentalFolderPath: pgtype.Text{String: ""},
-			AlbumID:                pgtype.Text{String: albumId},
-			TotalDuration:          duration,
-			Info:                   exifInfoBytes,
-			Instrumental:           pgtype.Bool{Bool: uploadCfg.IsInstrumental},
-			Tempo:                  tempo,
-			Key:                    pgtype.Text{String: string(keyBytes)},
-			VocalWaveform:          compressedVocalWF,
-			InstrumentalWaveform:   compressedInstrumentalWF,
-			AlbumName:              pgtype.Text{String: exifInfo.Album},
-		})
-	} else {
-		log.WithFields(log.Fields{
-			"instrumental_segment_file_count": len(instrumentalSegmentFiles),
-			"vocal_segment_file_count":        len(vocalSegmentFiles),
-			"tempo":                           string(tempoBytes),
-			"song_written_with_key":           string(keyBytes),
-			"exif_info":                       string(exifInfoBytes),
-		}).Debug("dry run :: results")
 	}
-	return nil
+	p.db_record.Tempo = tempo
+}
+
+// inserts album if the name does not exist
+func (p *audioProcessor) loadAlbumId(ctx context.Context) {
+	var albumId string
+	tx, err := p.app.Conn.BeginTx(ctx, pgx.TxOptions{})
+	defer tx.Rollback(ctx)
+	check(err)
+	qtx := p.app.DB.WithTx(tx)
+	albumId, err = qtx.GetAlbumIDByName(ctx, pgtype.Text{String: p.info.Album})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			albumId, err = qtx.InsertAlbum(ctx, db.InsertAlbumParams{
+				ID:    uuid.NewString(),
+				Name:  pgtype.Text{String: p.info.Album},
+				Cover: pgtype.Text{String: ""},
+			})
+			check(err)
+		} else {
+			log.Fatal(err)
+		}
+	}
+	err = tx.Commit(ctx)
+	check(err)
+	p.db_record.AlbumID = pgtype.Text{String: albumId}
 }

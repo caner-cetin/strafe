@@ -113,9 +113,13 @@ const (
 )
 
 func exitIfImage(condition ImageCheckCondition) {
-	docker := internal.NewDockerClient()
+	docker, err := internal.NewDockerClient()
+	if err != nil {
+		color.Red("error initializing docker client: %s", err.Error())
+		os.Exit(1)
+	}
 	defer docker.Close()
-	err := imageExists(docker)
+	err = imageExists(docker)
 	switch condition {
 	case Exists:
 		if err == nil {

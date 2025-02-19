@@ -14,6 +14,7 @@ type ResourceType int
 const (
 	ResourceDatabase ResourceType = iota
 	ResourceDocker
+	ResourceS3
 )
 
 type ResourceConfig struct {
@@ -47,7 +48,13 @@ func WrapCommandWithResources(fn func(cmd *cobra.Command, args []string), config
 					log.Errorf("failed to initialize docker: %v", err)
 					return
 				}
+			case ResourceS3:
+				if err := internal.InitializeS3(&appCtx); err != nil {
+					log.Errorf("failed to initialize s3: %v", err)
+					return
+				}
 			}
+
 		}
 		defer func() {
 			if appCtx.Conn != nil {

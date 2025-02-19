@@ -3,6 +3,8 @@ package internal
 import (
 	"strafe/pkg/db"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/docker/docker/client"
 	"github.com/jackc/pgx/v5"
 )
@@ -11,6 +13,10 @@ type AppCtx struct {
 	DB     *db.Queries
 	Docker *client.Client
 	Conn   *pgx.Conn
+	S3     struct {
+		Client *s3.Client
+		Config aws.Config
+	}
 }
 
 const (
@@ -22,6 +28,10 @@ const (
 	DOCKER_SOCKET             = "docker.socket"
 	DB_URL                    = "db.url"
 	DISPLAY_ASCII_ART_ON_HELP = "display_ascii_art_on_help"
+	S3_BUCKET_NAME            = "s3.bucket"
+	S3_ACCOUNT_ID             = "s3.account_id"
+	S3_ACCESS_KEY_ID          = "s3.access_key_id"
+	S3_ACCESS_KEY_SECRET      = "s3.access_key_secret"
 )
 
 type ConfigDefault string
