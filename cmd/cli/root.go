@@ -32,6 +32,7 @@ var ()
 
 func init() {
 	internal.InitConfig()
+	cobra.OnInitialize(internal.InitConfig)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,

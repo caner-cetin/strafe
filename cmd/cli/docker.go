@@ -61,17 +61,17 @@ use --force / -F flag to override this behaviour and build the image anyways.
 logs will be streamed by default just like the normal image building process, use --quiet / -Q to shut me up
 
 this process may take a while.`,
-		Run: internal.WrapCommandWithResources(buildImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
+		Run: WrapCommandWithResources(buildImage, ResourceConfig{Resources: []ResourceType{ResourceDocker}}),
 	}
 	removeImageCmd = &cobra.Command{
 		Use:   "remove",
 		Short: "remove the image",
-		Run:   internal.WrapCommandWithResources(removeImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
+		Run:   WrapCommandWithResources(removeImage, ResourceConfig{Resources: []ResourceType{ResourceDocker}}),
 	}
 	healthImageCmd = &cobra.Command{
 		Use:   "health",
 		Short: "check health of utilities inside the image",
-		Run:   internal.WrapCommandWithResources(healthImage, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDocker}}),
+		Run:   WrapCommandWithResources(healthImage, ResourceConfig{Resources: []ResourceType{ResourceDocker}}),
 	}
 )
 

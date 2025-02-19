@@ -21,7 +21,7 @@ var (
 	host   string
 	runCmd = &cobra.Command{
 		Use: "server [--port -p]",
-		Run: internal.WrapCommandWithResources(runServer, internal.ResourceConfig{Resources: []internal.ResourceType{internal.ResourceDatabase}}),
+		Run: runServer,
 	}
 )
 
@@ -32,14 +32,17 @@ func GetRunCmd() *cobra.Command {
 }
 
 func runServer(command *cobra.Command, args []string) {
-	ctx := command.Context()
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(WithAppContext(ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)))
+	app := internal.AppCtx{}
+	if err := internal.InitializeDB(context.Background(), &app); err != nil {
+		log.Fatal(err)
+	}
+	r.Use(WithAppContext(app))
 
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://cansu.dev", "http://localhost:5173", "https://dj.cansu.dev"},

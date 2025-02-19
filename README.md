@@ -1,10 +1,19 @@
+# Strafe
 uploader cli and server for https://dj.cansu.dev
+
+- [Strafe](#strafe)
+  - [install](#install)
+    - [uv](#uv)
+    - [docker](#docker)
+  - [run](#run)
 
 wip
 
-### install
+## install
 
-only dependency is uv, `uvx` is not needed, `uv` must be in system path. skip if already installed.
+two dependencies required 
+
+### uv
 
 <details>
 
@@ -27,7 +36,11 @@ if you dont want installation scripts just https://docs.astral.sh/uv/getting-sta
 
 </details>
 
-then:
+### docker
+
+install anything that is compatible with Docker, I am using Orbstack on Mac, and the socket works fine. just make sure that `docker.socket` config leads to the correct path, such as `unix:///var/run/docker.sock`, `/Users/canercetin/.orbstack/run/docker.sock` etc.
+
+## run
 
 ```bash
 # if you want to build for your own system
@@ -65,3 +78,4 @@ just package
 # └── strafe-windows-arm64.zip
 # deflates around 60-70%
 ```
+
