@@ -14,13 +14,14 @@ CREATE TABLE public.tracks (
 	instrumental bool NULL,
 	tempo numeric NULL,
 	"key" text NULL,
-	vocal_waveform BYTEA NULL,
-	instrumental_waveform BYTEA NULL,
+	vocal_waveform bytea NULL,
+	instrumental_waveform bytea NULL,
+	album_name text NULL,
 	CONSTRAINT tracks_pkey PRIMARY KEY (id)
 );
-CREATE INDEX idx_tracks_artist ON public.tracks ("(info ->> 'Artist'::text)");
-CREATE INDEX idx_tracks_genre ON public.tracks ("(info ->> 'Genre'::text)");
-CREATE INDEX idx_tracks_title ON public.tracks ("(info ->> 'Title'::text)");
+CREATE INDEX idx_tracks_artist ON public.tracks USING btree (((info ->> 'Artist'::text)));
+CREATE INDEX idx_tracks_genre ON public.tracks USING btree (((info ->> 'Genre'::text)));
+CREATE INDEX idx_tracks_title ON public.tracks USING btree (((info ->> 'Title'::text)));
 
 -- public.listening_histories definition
 
@@ -43,6 +44,6 @@ CREATE TABLE public.listening_histories (
 CREATE TABLE public.albums (
 	id text NOT NULL,
 	"name" text NULL,
-	cover_extension text NULL,
+	cover text NULL,
 	CONSTRAINT albums_pkey PRIMARY KEY (id)
 );

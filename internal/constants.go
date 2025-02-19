@@ -78,3 +78,13 @@ type ExifInfo struct {
 	DateTimeOriginal    int     `json:"DateTimeOriginal,omitempty"`
 	Duration            string  `json:"Duration,omitempty"`
 }
+
+type WaveformInfo struct {
+	Version         int   `json:"version"`
+	Channels        int   `json:"channels"`
+	SampleRate      int   `json:"sample_rate"`
+	SamplesPerPixel int   `json:"samples_per_pixel"`
+	Bits            int   `json:"bits"`
+	Length          int   `json:"length"`
+	Data            []int `json:"data"`
+}

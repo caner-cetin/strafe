@@ -23,7 +23,7 @@ func (q *Queries) DeleteListeningHistoryByAnonID(ctx context.Context, anonID pgt
 }
 
 const getAlbumById = `-- name: GetAlbumById :one
-SELECT a.id, a.name, a.cover_extension
+SELECT a.id, a.name, a.cover
 FROM albums a
 WHERE a.id = $1
 `
@@ -31,12 +31,38 @@ WHERE a.id = $1
 func (q *Queries) GetAlbumById(ctx context.Context, id string) (Album, error) {
 	row := q.db.QueryRow(ctx, getAlbumById, id)
 	var i Album
-	err := row.Scan(&i.ID, &i.Name, &i.CoverExtension)
+	err := row.Scan(&i.ID, &i.Name, &i.Cover)
 	return i, err
 }
 
+const getAlbumByName = `-- name: GetAlbumByName :one
+SELECT a.id, a.name, a.cover
+FROM albums a
+WHERE a.name = $1
+`
+
+func (q *Queries) GetAlbumByName(ctx context.Context, name pgtype.Text) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumByName, name)
+	var i Album
+	err := row.Scan(&i.ID, &i.Name, &i.Cover)
+	return i, err
+}
+
+const getAlbumIDByName = `-- name: GetAlbumIDByName :one
+SELECT a.id
+FROM albums a
+WHERE a.name = $1
+`
+
+func (q *Queries) GetAlbumIDByName(ctx context.Context, name pgtype.Text) (string, error) {
+	row := q.db.QueryRow(ctx, getAlbumIDByName, name)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getRandomTrack = `-- name: GetRandomTrack :one
-SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
 LEFT JOIN albums a ON a.id = t.album_id
 ORDER BY RANDOM()
@@ -59,12 +85,13 @@ func (q *Queries) GetRandomTrack(ctx context.Context) (Track, error) {
 		&i.Key,
 		&i.VocalWaveform,
 		&i.InstrumentalWaveform,
+		&i.AlbumName,
 	)
 	return i, err
 }
 
 const getRandomUnlistenedTrack = `-- name: GetRandomUnlistenedTrack :one
-SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
 LEFT JOIN albums a ON a.id = t.album_id
 LEFT JOIN listening_histories lh ON t.id = lh.track_id AND lh.anon_id = $1
@@ -89,57 +116,13 @@ func (q *Queries) GetRandomUnlistenedTrack(ctx context.Context, anonID pgtype.Te
 		&i.Key,
 		&i.VocalWaveform,
 		&i.InstrumentalWaveform,
-	)
-	return i, err
-}
-
-const getTrackBasicByID = `-- name: GetTrackBasicByID :one
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks
-WHERE id = $1
-`
-
-type GetTrackBasicByIDRow struct {
-	ID                     string
-	VocalFolderPath        pgtype.Text
-	InstrumentalFolderPath pgtype.Text
-	AlbumID                pgtype.Text
-	TotalDuration          pgtype.Numeric
-	Info                   []byte
-	Instrumental           pgtype.Bool
-	Tempo                  pgtype.Numeric
-	Key                    pgtype.Text
-}
-
-// Gets basic track information by ID
-func (q *Queries) GetTrackBasicByID(ctx context.Context, id string) (GetTrackBasicByIDRow, error) {
-	row := q.db.QueryRow(ctx, getTrackBasicByID, id)
-	var i GetTrackBasicByIDRow
-	err := row.Scan(
-		&i.ID,
-		&i.VocalFolderPath,
-		&i.InstrumentalFolderPath,
-		&i.AlbumID,
-		&i.TotalDuration,
-		&i.Info,
-		&i.Instrumental,
-		&i.Tempo,
-		&i.Key,
+		&i.AlbumName,
 	)
 	return i, err
 }
 
 const getTrackByID = `-- name: GetTrackByID :one
-SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform
+SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
 WHERE t.id = $1
 `
@@ -160,6 +143,7 @@ func (q *Queries) GetTrackByID(ctx context.Context, id string) (Track, error) {
 		&i.Key,
 		&i.VocalWaveform,
 		&i.InstrumentalWaveform,
+		&i.AlbumName,
 	)
 	return i, err
 }
@@ -174,148 +158,6 @@ func (q *Queries) GetTrackCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
-}
-
-const getTrackWaveforms = `-- name: GetTrackWaveforms :one
-SELECT 
-    vocal_waveform,
-    instrumental_waveform
-FROM tracks
-WHERE id = $1
-`
-
-type GetTrackWaveformsRow struct {
-	VocalWaveform        []byte
-	InstrumentalWaveform []byte
-}
-
-// Gets only the waveform data for a specific track
-func (q *Queries) GetTrackWaveforms(ctx context.Context, id string) (GetTrackWaveformsRow, error) {
-	row := q.db.QueryRow(ctx, getTrackWaveforms, id)
-	var i GetTrackWaveformsRow
-	err := row.Scan(&i.VocalWaveform, &i.InstrumentalWaveform)
-	return i, err
-}
-
-const getTracksBasic = `-- name: GetTracksBasic :many
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks
-`
-
-type GetTracksBasicRow struct {
-	ID                     string
-	VocalFolderPath        pgtype.Text
-	InstrumentalFolderPath pgtype.Text
-	AlbumID                pgtype.Text
-	TotalDuration          pgtype.Numeric
-	Info                   []byte
-	Instrumental           pgtype.Bool
-	Tempo                  pgtype.Numeric
-	Key                    pgtype.Text
-}
-
-// Gets all track information except waveforms
-func (q *Queries) GetTracksBasic(ctx context.Context) ([]GetTracksBasicRow, error) {
-	rows, err := q.db.Query(ctx, getTracksBasic)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetTracksBasicRow
-	for rows.Next() {
-		var i GetTracksBasicRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.VocalFolderPath,
-			&i.InstrumentalFolderPath,
-			&i.AlbumID,
-			&i.TotalDuration,
-			&i.Info,
-			&i.Instrumental,
-			&i.Tempo,
-			&i.Key,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getTracksBasicPaginated = `-- name: GetTracksBasicPaginated :many
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks
-LIMIT $1
-OFFSET $2
-`
-
-type GetTracksBasicPaginatedParams struct {
-	Limit  int32
-	Offset int32
-}
-
-type GetTracksBasicPaginatedRow struct {
-	ID                     string
-	VocalFolderPath        pgtype.Text
-	InstrumentalFolderPath pgtype.Text
-	AlbumID                pgtype.Text
-	TotalDuration          pgtype.Numeric
-	Info                   []byte
-	Instrumental           pgtype.Bool
-	Tempo                  pgtype.Numeric
-	Key                    pgtype.Text
-}
-
-// Gets basic track information with pagination
-func (q *Queries) GetTracksBasicPaginated(ctx context.Context, arg GetTracksBasicPaginatedParams) ([]GetTracksBasicPaginatedRow, error) {
-	rows, err := q.db.Query(ctx, getTracksBasicPaginated, arg.Limit, arg.Offset)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []GetTracksBasicPaginatedRow
-	for rows.Next() {
-		var i GetTracksBasicPaginatedRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.VocalFolderPath,
-			&i.InstrumentalFolderPath,
-			&i.AlbumID,
-			&i.TotalDuration,
-			&i.Info,
-			&i.Instrumental,
-			&i.Tempo,
-			&i.Key,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getTracksByArtist = `-- name: GetTracksByArtist :many
@@ -432,6 +274,66 @@ func (q *Queries) GetTracksByGenre(ctx context.Context, info []byte) ([]GetTrack
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertAlbum = `-- name: InsertAlbum :one
+INSERT INTO public.albums
+(id, "name", cover)
+VALUES($1, $2, $3)
+RETURNING id
+`
+
+type InsertAlbumParams struct {
+	ID    string
+	Name  pgtype.Text
+	Cover pgtype.Text
+}
+
+// returns id
+func (q *Queries) InsertAlbum(ctx context.Context, arg InsertAlbumParams) (string, error) {
+	row := q.db.QueryRow(ctx, insertAlbum, arg.ID, arg.Name, arg.Cover)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const insertTrack = `-- name: InsertTrack :exec
+INSERT INTO public.tracks
+(id, vocal_folder_path, instrumental_folder_path, album_id, total_duration, info, instrumental, tempo, "key", vocal_waveform, instrumental_waveform, album_name)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+`
+
+type InsertTrackParams struct {
+	ID                     string
+	VocalFolderPath        pgtype.Text
+	InstrumentalFolderPath pgtype.Text
+	AlbumID                pgtype.Text
+	TotalDuration          pgtype.Numeric
+	Info                   []byte
+	Instrumental           pgtype.Bool
+	Tempo                  pgtype.Numeric
+	Key                    pgtype.Text
+	VocalWaveform          []byte
+	InstrumentalWaveform   []byte
+	AlbumName              pgtype.Text
+}
+
+func (q *Queries) InsertTrack(ctx context.Context, arg InsertTrackParams) error {
+	_, err := q.db.Exec(ctx, insertTrack,
+		arg.ID,
+		arg.VocalFolderPath,
+		arg.InstrumentalFolderPath,
+		arg.AlbumID,
+		arg.TotalDuration,
+		arg.Info,
+		arg.Instrumental,
+		arg.Tempo,
+		arg.Key,
+		arg.VocalWaveform,
+		arg.InstrumentalWaveform,
+		arg.AlbumName,
+	)
+	return err
 }
 
 const recordListeningHistory = `-- name: RecordListeningHistory :exec

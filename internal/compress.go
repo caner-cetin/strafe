@@ -8,12 +8,8 @@ import (
 	"io"
 )
 
-func CompressJSON[T any](data T) ([]byte, error) {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	base64String := base64.StdEncoding.EncodeToString(jsonData)
+func CompressJSON(data []byte) ([]byte, error) {
+	base64String := base64.StdEncoding.EncodeToString(data)
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetIndent("", "")

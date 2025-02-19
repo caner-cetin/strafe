@@ -9,9 +9,9 @@ import (
 )
 
 type Album struct {
-	ID             string
-	Name           pgtype.Text
-	CoverExtension pgtype.Text
+	ID    string
+	Name  pgtype.Text
+	Cover pgtype.Text
 }
 
 type ListeningHistory struct {
@@ -32,4 +32,5 @@ type Track struct {
 	Key                    pgtype.Text
 	VocalWaveform          []byte
 	InstrumentalWaveform   []byte
+	AlbumName              pgtype.Text
 }

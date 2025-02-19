@@ -356,3 +356,11 @@ func createTempFile(ext string) (*os.File, error) {
 	}
 	return file, nil
 }
+
+func createTempFileReturnPath(ext string) (string, error) {
+	f, err := createTempFile(ext)
+	if err != nil {
+		return "", err
+	}
+	return f.Name(), err
+}

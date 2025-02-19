@@ -1,41 +1,3 @@
--- name: GetTracksBasic :many
--- Gets all track information except waveforms
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks;
-
--- name: GetTrackWaveforms :one
--- Gets only the waveform data for a specific track
-SELECT 
-    vocal_waveform,
-    instrumental_waveform
-FROM tracks
-WHERE id = $1;
-
--- name: GetTracksBasicPaginated :many
--- Gets basic track information with pagination
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks
-LIMIT $1
-OFFSET $2;
-
 -- name: GetTracksByArtist :many
 -- Gets basic track information filtered by artist
 SELECT 
@@ -69,21 +31,6 @@ WHERE info->>'Genre' = $1;
 -- name: GetTrackCount :one
 -- Gets total number of tracks
 SELECT COUNT(*) FROM tracks;
-
--- name: GetTrackBasicByID :one
--- Gets basic track information by ID
-SELECT 
-    id,
-    vocal_folder_path,
-    instrumental_folder_path,
-    album_id,
-    total_duration,
-    info,
-    instrumental,
-    tempo,
-    "key"
-FROM tracks
-WHERE id = $1;
 
 -- name: SearchTracks :many
 -- Searches tracks by title, artist, or genre
@@ -136,8 +83,30 @@ SELECT a.*
 FROM albums a
 WHERE a.id = $1;
 
+-- name: GetAlbumByName :one
+SELECT a.*
+FROM albums a
+WHERE a.name = $1;
+
+-- name: GetAlbumIDByName :one
+SELECT a.id
+FROM albums a
+WHERE a.name = $1;
+
+-- name: InsertAlbum :one
+-- returns id
+INSERT INTO public.albums
+(id, "name", cover)
+VALUES($1, $2, $3)
+RETURNING id;
+
 -- name: GetTrackByID :one
 -- Get track by ID (all columns, use GetTrackBasicByID if waveforms are not needed)
 SELECT t.*
 FROM tracks t
 WHERE t.id = $1;
+
+-- name: InsertTrack :exec
+INSERT INTO public.tracks
+(id, vocal_folder_path, instrumental_folder_path, album_id, total_duration, info, instrumental, tempo, "key", vocal_waveform, instrumental_waveform, album_name)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
