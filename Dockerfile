@@ -33,6 +33,7 @@ WORKDIR /tmp/keyfinder-cli
 RUN apt-get install -y libavutil-dev libavcodec-dev libavformat-dev libswresample-dev
 ENV LD_LIBRARY_PATH=/usr/local/lib/:/usr/lib/
 RUN make && make install
+RUN apt-get install -y python3-pkg-resources python3-numpy
 RUN apt-get install -y aubio-tools python3-aubio
 RUN wget  https://exiftool.org/Image-ExifTool-13.19.tar.gz && \
   gzip -dc Image-ExifTool-13.19.tar.gz | tar -xf - && \
