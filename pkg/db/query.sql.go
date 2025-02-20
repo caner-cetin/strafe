@@ -23,7 +23,7 @@ func (q *Queries) DeleteListeningHistoryByAnonID(ctx context.Context, anonID pgt
 }
 
 const getAlbumById = `-- name: GetAlbumById :one
-SELECT a.id, a.name, a.cover
+SELECT a.id, a.name, a.cover, a.artist
 FROM albums a
 WHERE a.id = $1
 `
@@ -31,12 +31,17 @@ WHERE a.id = $1
 func (q *Queries) GetAlbumById(ctx context.Context, id string) (Album, error) {
 	row := q.db.QueryRow(ctx, getAlbumById, id)
 	var i Album
-	err := row.Scan(&i.ID, &i.Name, &i.Cover)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Cover,
+		&i.Artist,
+	)
 	return i, err
 }
 
 const getAlbumByName = `-- name: GetAlbumByName :one
-SELECT a.id, a.name, a.cover
+SELECT a.id, a.name, a.cover, a.artist
 FROM albums a
 WHERE a.name = $1
 `
@@ -44,7 +49,35 @@ WHERE a.name = $1
 func (q *Queries) GetAlbumByName(ctx context.Context, name pgtype.Text) (Album, error) {
 	row := q.db.QueryRow(ctx, getAlbumByName, name)
 	var i Album
-	err := row.Scan(&i.ID, &i.Name, &i.Cover)
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Cover,
+		&i.Artist,
+	)
+	return i, err
+}
+
+const getAlbumByNameAndArtist = `-- name: GetAlbumByNameAndArtist :one
+SELECT a.id, a.name, a.cover, a.artist
+FROM albums a
+WHERE a.name = $1 AND a.artist = $2
+`
+
+type GetAlbumByNameAndArtistParams struct {
+	Name   pgtype.Text
+	Artist pgtype.Text
+}
+
+func (q *Queries) GetAlbumByNameAndArtist(ctx context.Context, arg GetAlbumByNameAndArtistParams) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumByNameAndArtist, arg.Name, arg.Artist)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Cover,
+		&i.Artist,
+	)
 	return i, err
 }
 
@@ -56,6 +89,24 @@ WHERE a.name = $1
 
 func (q *Queries) GetAlbumIDByName(ctx context.Context, name pgtype.Text) (string, error) {
 	row := q.db.QueryRow(ctx, getAlbumIDByName, name)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const getAlbumIDByNameAndArtist = `-- name: GetAlbumIDByNameAndArtist :one
+SELECT a.id
+FROM albums a
+WHERE a.name = $1 AND a.artist = $2
+`
+
+type GetAlbumIDByNameAndArtistParams struct {
+	Name   pgtype.Text
+	Artist pgtype.Text
+}
+
+func (q *Queries) GetAlbumIDByNameAndArtist(ctx context.Context, arg GetAlbumIDByNameAndArtistParams) (string, error) {
+	row := q.db.QueryRow(ctx, getAlbumIDByNameAndArtist, arg.Name, arg.Artist)
 	var id string
 	err := row.Scan(&id)
 	return id, err
@@ -93,7 +144,6 @@ func (q *Queries) GetRandomTrack(ctx context.Context) (Track, error) {
 const getRandomUnlistenedTrack = `-- name: GetRandomUnlistenedTrack :one
 SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
-LEFT JOIN albums a ON a.id = t.album_id
 LEFT JOIN listening_histories lh ON t.id = lh.track_id AND lh.anon_id = $1
 WHERE lh.track_id IS NULL
 ORDER BY RANDOM()
@@ -278,20 +328,26 @@ func (q *Queries) GetTracksByGenre(ctx context.Context, info []byte) ([]GetTrack
 
 const insertAlbum = `-- name: InsertAlbum :one
 INSERT INTO public.albums
-(id, "name", cover)
-VALUES($1, $2, $3)
+(id, "name", cover, artist)
+VALUES($1, $2, $3, $4)
 RETURNING id
 `
 
 type InsertAlbumParams struct {
-	ID    string
-	Name  pgtype.Text
-	Cover pgtype.Text
+	ID     string
+	Name   pgtype.Text
+	Cover  pgtype.Text
+	Artist pgtype.Text
 }
 
 // returns id
 func (q *Queries) InsertAlbum(ctx context.Context, arg InsertAlbumParams) (string, error) {
-	row := q.db.QueryRow(ctx, insertAlbum, arg.ID, arg.Name, arg.Cover)
+	row := q.db.QueryRow(ctx, insertAlbum,
+		arg.ID,
+		arg.Name,
+		arg.Cover,
+		arg.Artist,
+	)
 	var id string
 	err := row.Scan(&id)
 	return id, err

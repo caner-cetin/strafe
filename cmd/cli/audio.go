@@ -114,6 +114,11 @@ type audioProcessor struct {
 		segments struct {
 			vocal        string
 			instrumental string
+			// s3 upload paths for segments
+			s3 struct {
+				vocal        string
+				instrumental string
+			}
 		}
 		// keyfinder-cli output
 		key string
@@ -130,6 +135,7 @@ type audioProcessor struct {
 		// entrypoint bash script for docker container
 		entrypoint string
 	}
+	// output of exifinfo
 	info        internal.ExifInfo
 	db_record   db.InsertTrackParams
 	audioFormat string
@@ -174,12 +180,6 @@ func processAndUploadAudio(cmd *cobra.Command, args []string) {
 
 func (p *audioProcessor) setupAudioSeparator() error {
 	uvPath, err := exec.LookPath("uv")
-	if errors.Is(err, exec.ErrDot) {
-		err = nil
-	}
-	if err != nil {
-		log.Fatalf("uv is not installed! %v", err)
-	}
 	if errors.Is(err, exec.ErrDot) {
 		err = nil
 	}
@@ -379,37 +379,35 @@ func (p *audioProcessor) runContainer() (<-chan container.WaitResponse, <-chan e
 }
 
 func (p *audioProcessor) processResults(ctx context.Context) error {
-	exifInfoBytes := p.loadExifInfo()
-	log.Info(color.CyanString(`finished processing %s - %s [%d - %s]`, p.info.Artist, p.info.Title, p.info.Year, p.info.Album))
-
+	p.loadExifInfo()
+	log.Info(color.CyanString(`processing %s - %s [%d - %s]`, p.info.Artist, p.info.Title, p.info.Year, p.info.Album))
+	p.loadWaveforms()
+	p.loadDuration()
+	p.loadKey()
+	p.loadTempo()
 	if !uploadCfg.DryRun {
-		p.loadWaveforms()
-		p.loadDuration()
-		p.loadKey()
-		p.loadTempo()
-		p.loadAlbumId(ctx)
+		p.loadOrCreateAlbum(ctx)
 		p.db_record.ID = uuid.NewString()
-		p.db_record.Info = exifInfoBytes
-		p.db_record.Instrumental = pgtype.Bool{Bool: uploadCfg.IsInstrumental}
-		p.db_record.AlbumName = pgtype.Text{String: p.info.Album}
-		p.app.CreateBucketIfNotExists(ctx, viper.GetString(internal.S3_BUCKET_NAME))
-		p.app.DB.InsertTrack(ctx, db.InsertTrackParams{
-			VocalFolderPath:        pgtype.Text{String: ""},
-			InstrumentalFolderPath: pgtype.Text{String: ""},
-		})
+		p.db_record.Instrumental = pgtype.Bool{Bool: uploadCfg.IsInstrumental, Valid: true}
+		p.db_record.AlbumName = pgtype.Text{String: p.info.Album, Valid: true}
+		p.upload()
+		p.app.DB.InsertTrack(ctx, p.db_record)
 	}
 	return nil
 }
 
-func (p *audioProcessor) loadExifInfo() []byte {
-	exifInfoBytes, err := os.ReadFile(p.paths.exif)
+func (p *audioProcessor) loadExifInfo() {
+	// 1 element array, as we pass one single audio
+	exifInfoArrayBytes, err := os.ReadFile(p.paths.exif)
+	check(err)
+	exifInfoObjectBytes := fastjson.MustParseBytes(exifInfoArrayBytes).GetArray()[0].GetObject().MarshalTo(nil)
 	check(err)
 	var exifInfo internal.ExifInfo
-	if err = json.Unmarshal(fastjson.MustParseBytes(exifInfoBytes).GetArray()[0].GetObject().MarshalTo(nil), &exifInfo); err != nil {
+	if err = json.Unmarshal(exifInfoObjectBytes, &exifInfo); err != nil {
 		check(err)
 	}
 	p.info = exifInfo
-	return exifInfoBytes
+	p.db_record.Info = exifInfoObjectBytes
 }
 
 func (p *audioProcessor) loadWaveforms() {
@@ -438,7 +436,7 @@ func (p *audioProcessor) loadDuration() {
 func (p *audioProcessor) loadKey() {
 	keyBytes, err := os.ReadFile(p.paths.key)
 	check(err)
-	p.db_record.Key = pgtype.Text{String: string(keyBytes)}
+	p.db_record.Key = pgtype.Text{String: strings.TrimSpace(strings.Replace(string(keyBytes), "\n", "", -1)), Valid: true}
 }
 
 func (p *audioProcessor) loadTempo() {
@@ -452,19 +450,24 @@ func (p *audioProcessor) loadTempo() {
 }
 
 // inserts album if the name does not exist
-func (p *audioProcessor) loadAlbumId(ctx context.Context) {
+func (p *audioProcessor) loadOrCreateAlbum(ctx context.Context) {
 	var albumId string
 	tx, err := p.app.Conn.BeginTx(ctx, pgx.TxOptions{})
 	defer tx.Rollback(ctx)
 	check(err)
 	qtx := p.app.DB.WithTx(tx)
-	albumId, err = qtx.GetAlbumIDByName(ctx, pgtype.Text{String: p.info.Album})
+	albumId, err = qtx.GetAlbumIDByNameAndArtist(ctx,
+		db.GetAlbumIDByNameAndArtistParams{
+			Name:   pgtype.Text{String: p.info.Album, Valid: true},
+			Artist: pgtype.Text{String: p.info.Artist, Valid: true}},
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			albumId, err = qtx.InsertAlbum(ctx, db.InsertAlbumParams{
-				ID:    uuid.NewString(),
-				Name:  pgtype.Text{String: p.info.Album},
-				Cover: pgtype.Text{String: ""},
+				ID:     uuid.NewString(),
+				Name:   pgtype.Text{String: p.info.Album, Valid: true},
+				Cover:  pgtype.Text{String: p.coverArtS3Key(), Valid: true},
+				Artist: pgtype.Text{String: p.info.Artist, Valid: true},
 			})
 			check(err)
 		} else {
@@ -473,7 +476,64 @@ func (p *audioProcessor) loadAlbumId(ctx context.Context) {
 	}
 	err = tx.Commit(ctx)
 	check(err)
-	p.db_record.AlbumID = pgtype.Text{String: albumId}
+	p.db_record.AlbumID = pgtype.Text{String: albumId, Valid: true}
+	p.db_record.AlbumName = pgtype.Text{String: p.info.Album, Valid: true}
+}
+
+func (p *audioProcessor) coverArtS3Key() string {
+	coverArtPathSplit := strings.Split(uploadCfg.CoverArtPath, string(os.PathSeparator))
+	// last trim suffix for sanity check
+	return fmt.Sprintf("%s/%s/%s", p.info.Artist, p.info.Album, strings.TrimSuffix(coverArtPathSplit[len(coverArtPathSplit)-1], string(os.PathSeparator)))
+}
+func (p *audioProcessor) upload() {
+	if !viper.IsSet(internal.S3_BUCKET_NAME) {
+		log.Fatal("s3 bucket name is not set")
+	}
+	vocals, err := os.ReadDir(p.paths.segments.vocal)
+	check(err)
+	instrumentals, err := os.ReadDir(p.paths.segments.instrumental)
+	check(err)
+	uploadSegments := func(s3Folder string, files []os.DirEntry) {
+		log.Infof("uploading %s files", s3Folder)
+		for _, segment := range files {
+			var s3path = fmt.Sprintf("%s/%s/%s/%s/%s", p.info.Artist, p.info.Album, p.info.Title, s3Folder, segment.Name())
+			log.Infof("uploading %s", s3path)
+			var segmentBytes []byte
+			if s3Folder == "vocal" {
+				p.paths.segments.s3.vocal = s3path
+				p.db_record.VocalFolderPath = pgtype.Text{String: s3path, Valid: true}
+				segmentBytes, err = os.ReadFile(fmt.Sprintf("%s/%s", strings.TrimSuffix(p.paths.segments.vocal, string(os.PathSeparator)), segment.Name()))
+			} else {
+				p.paths.segments.s3.instrumental = s3path
+				p.db_record.InstrumentalFolderPath = pgtype.Text{String: s3path, Valid: true}
+				segmentBytes, err = os.ReadFile(fmt.Sprintf("%s/%s", strings.TrimSuffix(p.paths.segments.instrumental, string(os.PathSeparator)), segment.Name()))
+			}
+			check(err)
+			_, err = p.app.UploadObject(p.ctx, viper.GetString(internal.S3_BUCKET_NAME), s3path, segmentBytes)
+			check(err)
+		}
+	}
+	if !uploadCfg.IsInstrumental {
+		uploadSegments("vocal", vocals)
+	}
+	uploadSegments("instrumental", instrumentals)
+	objs, err := p.app.ListObjects(p.ctx, viper.GetString(internal.S3_BUCKET_NAME))
+	check(err)
+	var coverArtFound = false
+	var coverArtKey = p.coverArtS3Key()
+	for _, obj := range objs {
+		if *obj.Key == coverArtKey {
+			coverArtFound = true
+			break
+		}
+	}
+	if !coverArtFound {
+		coverArtBytes, err := os.ReadFile(uploadCfg.CoverArtPath)
+		check(err)
+		log.Infof("uploading cover art to %s", coverArtKey)
+		_, err = p.app.UploadObject(p.ctx, viper.GetString(internal.S3_BUCKET_NAME), coverArtKey, coverArtBytes)
+		check(err)
+	}
 }
 
 func listModels(cmd *cobra.Command, args []string) {

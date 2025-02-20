@@ -83,7 +83,7 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	streamTrackInfo(w, track, app, r)
+	streamTrackInfo(w, track)
 	err = app.DB.RecordListeningHistory(
 		r.Context(),
 		db.RecordListeningHistoryParams{
@@ -106,17 +106,12 @@ func GetTrack(w http.ResponseWriter, r *http.Request) {
 		internal.ServerError(w, err)
 		return
 	}
-	streamTrackInfo(w, track, app, r)
+	streamTrackInfo(w, track)
 }
 
-func streamTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx, r *http.Request) {
+func streamTrackInfo(w http.ResponseWriter, track db.Track) {
 	var response Track
-	album, err := app.DB.GetAlbumById(r.Context(), track.AlbumID.String)
-	if err != nil {
-		internal.ServerError(w, err)
-		return
-	}
-	response.Cover = fmt.Sprintf("%s/cover.jpg", album.Name.String)
+	response.Cover = fmt.Sprintf("%s/cover.jpg", track.AlbumName.String)
 	response.ID = track.ID
 
 	response.SavedVocalFolderPath = track.VocalFolderPath.String

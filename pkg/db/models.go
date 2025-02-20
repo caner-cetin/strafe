@@ -9,9 +9,10 @@ import (
 )
 
 type Album struct {
-	ID    string
-	Name  pgtype.Text
-	Cover pgtype.Text
+	ID     string
+	Name   pgtype.Text
+	Cover  pgtype.Text
+	Artist pgtype.Text
 }
 
 type ListeningHistory struct {

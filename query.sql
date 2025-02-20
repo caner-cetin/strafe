@@ -88,16 +88,26 @@ SELECT a.*
 FROM albums a
 WHERE a.name = $1;
 
+-- name: GetAlbumByNameAndArtist :one
+SELECT a.*
+FROM albums a
+WHERE a.name = $1 AND a.artist = $2;
+
 -- name: GetAlbumIDByName :one
 SELECT a.id
 FROM albums a
 WHERE a.name = $1;
 
+-- name: GetAlbumIDByNameAndArtist :one
+SELECT a.id
+FROM albums a
+WHERE a.name = $1 AND a.artist = $2;
+
 -- name: InsertAlbum :one
 -- returns id
 INSERT INTO public.albums
-(id, "name", cover)
-VALUES($1, $2, $3)
+(id, "name", cover, artist)
+VALUES($1, $2, $3, $4)
 RETURNING id;
 
 -- name: GetTrackByID :one
