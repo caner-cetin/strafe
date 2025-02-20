@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"strafe/internal"
@@ -21,6 +22,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jedib0t/go-pretty/table"
+	"github.com/jedib0t/go-pretty/text"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -32,11 +35,10 @@ var (
 	audioCmd  = &cobra.Command{
 		Use:   "audio",
 		Short: "audio related commands",
-		Long:  fmt.Sprintf(`audio related commands, all commands under this tree requires strafe image to be built, use command %s if required`, color.MagentaString("strafe docker build")),
 	}
 )
 
-type AudioProcessConfig struct {
+type UploadConfig struct {
 	ModelCheckpoint  string
 	ModelDownloadDir string
 	// output directory for audio separator stems,
@@ -49,14 +51,26 @@ type AudioProcessConfig struct {
 	CoverArtPath   string
 }
 
+type ModelsConfig struct {
+	Source string
+}
+
 var (
 	uploadCmd = &cobra.Command{
-		Use:   "upload -a audio",
+		Use:   "upload -i audio -c cover",
 		Short: "processes and uploads audio",
-		Long:  `processes and uploads audio file given with -i / --input flag`,
+		Long:  fmt.Sprintf(`processes and uploads audio file given with -i / --input flag. requires strafe docker image to be built, use command %s if required`, color.MagentaString("strafe docker build")),
 		Run:   WrapCommandWithResources(processAndUploadAudio, ResourceConfig{Resources: []ResourceType{ResourceDocker, ResourceDatabase, ResourceS3}}),
 	}
-	uploadCfg = AudioProcessConfig{}
+	uploadCfg = UploadConfig{}
+	modelsCmd = &cobra.Command{
+		Use:   "models",
+		Short: "lists available audio separator models",
+		Long: fmt.Sprintf(`lists available audio separator models, useful for command %s. Default model for the %s command is Mel-Roformer-Karaoke-Aufr33-Viperx
+source %s`, color.MagentaString("audio"), color.MagentaString("audio"), color.WhiteString("https://raw.githubusercontent.com/nomadkaraoke/python-audio-separator/refs/heads/main/audio_separator/models.json")),
+		Run: listModels,
+	}
+	modelsCfg = ModelsConfig{}
 )
 
 func getAudioRootCmd() *cobra.Command {
@@ -66,15 +80,18 @@ func getAudioRootCmd() *cobra.Command {
 	uploadCmd.PersistentFlags().StringVar(&uploadCfg.OutputDir, "audio_output_directory", "/tmp/strafe-audio-separator-audio/", "directory to write output files from audio-splitter")
 	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.IsInstrumental, "instrumental", false, "specify if the audio is instrumental")
 	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.UseGPU, "gpu", false, "use gpu during audio separation")
-	uploadCmd.PersistentFlags().BoolVarP(&uploadCfg.DryRun, "dry_run", "D", false, "files and metadata will not be uploaded to S3 and database")
-	uploadCmd.PersistentFlags().StringVarP(&uploadCfg.CoverArtPath, "cover_art", "C", "", "cover art for the track, required")
+	uploadCmd.PersistentFlags().BoolVarP(&uploadCfg.DryRun, "dry_run", "d", false, "files and metadata will not be uploaded to S3 and database")
+	uploadCmd.PersistentFlags().StringVarP(&uploadCfg.CoverArtPath, "cover_art", "c", "", "cover art for the tracks album, required")
+
+	modelsCmd.PersistentFlags().StringVar(&modelsCfg.Source, "src", "https://raw.githubusercontent.com/nomadkaraoke/python-audio-separator/refs/heads/main/audio_separator/models.json", "model source")
 	audioCmd.AddCommand(uploadCmd)
+	audioCmd.AddCommand(modelsCmd)
 	audioCmd.PersistentFlags().StringVarP(&audioPath, "input", "i", "", "path of audio")
 	return audioCmd
 }
 
 type audioProcessor struct {
-	cfg       AudioProcessConfig
+	cfg       UploadConfig
 	app       internal.AppCtx
 	ctx       context.Context
 	container *container.CreateResponse
@@ -457,4 +474,67 @@ func (p *audioProcessor) loadAlbumId(ctx context.Context) {
 	err = tx.Commit(ctx)
 	check(err)
 	p.db_record.AlbumID = pgtype.Text{String: albumId}
+}
+
+func listModels(cmd *cobra.Command, args []string) {
+	req, err := http.NewRequest(http.MethodGet, modelsCfg.Source, nil)
+	check(err)
+	resp, err := http.DefaultClient.Do(req)
+	check(err)
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("cannot establish connection to the source, status code: %d", resp.StatusCode)
+	}
+	respBytes, err := io.ReadAll(resp.Body)
+	check(err)
+	var data = fastjson.MustParse(string(respBytes))
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetStyle(table.StyleColoredBright)
+	t.AppendHeader(table.Row{"Category", "Model Name", "File Name", "Config/Related File"})
+	processModels := func(category string, objName string) {
+		data.GetObject(objName).Visit(func(key []byte, v *fastjson.Value) {
+			modelName := strings.TrimSpace(strings.Split(string(key), ":")[1])
+
+			switch v.Type() {
+			case fastjson.TypeObject:
+				v.GetObject().Visit(func(subKey []byte, subV *fastjson.Value) {
+					t.AppendRow(table.Row{
+						category,
+						modelName,
+						string(subKey),
+						subV.String(), // config file
+					})
+				})
+			case fastjson.TypeString:
+				t.AppendRow(table.Row{
+					category,
+					"",
+					modelName,
+					v.String(), // again, config file
+				})
+			}
+		})
+	}
+
+	processModels("VR", "vr_download_list")
+	processModels("MDX", "mdx_download_list")
+	processModels("MDX23C", "mdx23c_download_list")
+	processModels("Roformer", "roformer_download_list")
+
+	t.SetColumnConfigs([]table.ColumnConfig{
+		{Name: "Category", WidthMax: 10},
+		{Name: "Model Name", WidthMax: 80},
+		{Name: "File Name", WidthMax: 70},
+		{Name: "Config/Related File", WidthMax: 70},
+	})
+
+	t.SetRowPainter(func(row table.Row) text.Colors {
+		if row[0] != "" {
+			return text.Colors{text.BgHiBlack}
+		}
+		return nil
+	})
+
+	t.Render()
 }
