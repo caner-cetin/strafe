@@ -144,6 +144,7 @@ func (q *Queries) GetRandomTrack(ctx context.Context) (Track, error) {
 const getRandomUnlistenedTrack = `-- name: GetRandomUnlistenedTrack :one
 SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
+LEFT JOIN albums a ON a.id = t.album_id
 LEFT JOIN listening_histories lh ON t.id = lh.track_id AND lh.anon_id = $1
 WHERE lh.track_id IS NULL
 ORDER BY RANDOM()

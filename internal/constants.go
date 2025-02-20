@@ -18,7 +18,7 @@ const (
 type ConfigDefault string
 
 const (
-	DOCKER_IMAGE_NAME_DEFAULT ConfigDefault = "strafe"
+	DOCKER_IMAGE_NAME_DEFAULT ConfigDefault = "cansucetin/strafe"
 	DOCKER_IMAGE_TAG_DEFAULT  ConfigDefault = "latest"
 )
 

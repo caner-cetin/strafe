@@ -47,9 +47,11 @@ var (
 		},
 	}
 	buildImageCmd = &cobra.Command{
-		Use:   "build [-D --dir] [-F --force] [-Q --quiet]",
-		Short: "build the image if it does not exist",
-		Long: `builds the utility image if it does not exist already.
+		Use:   "build [-d --dir] [-f --force] [-q --quiet] [-h --help]",
+		Short: "build the utility image if it does not exist",
+		Long: fmt.Sprintf(`builds the utility image if it does not exist already.
+
+%s
 
 source code is required for building the image.
 if you are running this command from the root of source code (the one with the Dockerfile in it), then this command will work fine.
@@ -60,7 +62,7 @@ use --force / -F flag to override this behaviour and build the image anyways.
 
 logs will be streamed by default just like the normal image building process, use --quiet / -Q to shut me up
 
-this process may take a while.`,
+this process may take a while.`, color.MagentaString("you dont need this command if you have specified docker.image.name as a remote image name, see configuration for more details")),
 		Run: WrapCommandWithResources(buildImage, ResourceConfig{Resources: []ResourceType{ResourceDocker}}),
 	}
 	removeImageCmd = &cobra.Command{

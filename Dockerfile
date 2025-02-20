@@ -13,10 +13,10 @@ RUN apt-get update && apt-get install -y \
   libboost-program-options-dev \
   libboost-filesystem-dev
 
-# todo: targetarch
-RUN wget "https://github.com/bbc/audiowaveform/releases/download/1.10.1/audiowaveform_1.10.1-1-12_arm64.deb" && \
-  dpkg -i "audiowaveform_1.10.1-1-12_arm64.deb" && \
-  rm "audiowaveform_1.10.1-1-12_arm64.deb"
+ARG TARGETARCH
+RUN wget "https://github.com/bbc/audiowaveform/releases/download/1.10.1/audiowaveform_1.10.1-1-12_${TARGETARCH}.deb" && \
+  dpkg -i "audiowaveform_1.10.1-1-12_${TARGETARCH}.deb" && \
+  rm "audiowaveform_1.10.1-1-12_${TARGETARCH}.deb"
 RUN mkdir -p /tmp/
 RUN mkdir -p /tmp/build
 RUN mkdir -p /tmp/libkeyfinder

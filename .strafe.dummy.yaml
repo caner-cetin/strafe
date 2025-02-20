@@ -1,10 +1,20 @@
+# all placeholders are defaults
+# if no placeholder is present, then the value is required
 docker:
+  # image of Dockerfile in main folder
+  # you can either
+  #   a. use prebuilt image from docker hub
+  #   b. use `strafe docker image build` command (you must run the command in source code folder, or specify source code folder)
+  #      and build your own image.
+  # if going with a, keep the image name same, you will pull my image.
+  # if going with b, use image name `strafe` or something similar.
   image:
-    name: strafe
+    name: cansucetin/strafe
     tag: latest
   socket: unix:///var/run/docker.sock
 db:
-  url: postgres://user:password@ip:port/db?sslmode=disable
+  # postgres://user:password@ip:port/db?sslmode=disable
+  url: 
 s3:
   bucket: 
   account_id: 

@@ -59,7 +59,7 @@ var (
 	uploadCmd = &cobra.Command{
 		Use:   "upload -i audio -c cover",
 		Short: "processes and uploads audio",
-		Long:  fmt.Sprintf(`processes and uploads audio file given with -i / --input flag. requires strafe docker image to be built, use command %s if required`, color.MagentaString("strafe docker build")),
+		Long:  `processes and uploads audio file given with -i / --input flag. requires strafe docker image.`,
 		Run:   WrapCommandWithResources(processAndUploadAudio, ResourceConfig{Resources: []ResourceType{ResourceDocker, ResourceDatabase, ResourceS3}}),
 	}
 	uploadCfg = UploadConfig{}
