@@ -6,6 +6,7 @@ uploader cli and server for https://dj.cansu.dev
     - [uv](#uv)
     - [docker](#docker)
   - [run](#run)
+  - [usage](#usage)
 
 wip
 
@@ -79,3 +80,21 @@ just package
 # deflates around 60-70%
 ```
 
+## usage
+fill the `.strafe.dummy.yaml`, rename to `.strafe.yaml` move it under your home directory
+
+```bash
+./strafe audio upload -i "Nails/2016 - You Will Never Be One of Us/01. You Will Never Be One of Us.mp3" -c folder.jpg
+```
+after the first track of album, cover art is not needed
+```bash
+./strafe audio upload -i "Nails/2016 - You Will Never Be One of Us/02. Friend to All.mp3"
+```
+keep going until entire album is uploaded, then
+```bash
+./strafe db search album -a Nails -n "You Will Never Be One of Us"
+```
+
+![alt text](./static/searchalbum.png)
+
+wip: folder uploads

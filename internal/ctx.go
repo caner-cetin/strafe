@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"strafe/pkg/db"
 	"time"
 
@@ -134,4 +135,27 @@ func (a *AppCtx) ListObjects(ctx context.Context, bucketName string) ([]types.Ob
 	}
 
 	return objects, nil
+}
+
+func (a *AppCtx) DownloadFile(ctx context.Context, bucketName string, objectKey string) ([]byte, error) {
+	result, err := a.S3.Client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucketName),
+		Key:    aws.String(objectKey),
+	})
+	if err != nil {
+		var noKey *types.NoSuchKey
+		if errors.As(err, &noKey) {
+			log.Printf("Can't get object %s from bucket %s. No such key exists.\n", objectKey, bucketName)
+			err = noKey
+		} else {
+			log.Printf("Couldn't get object %v:%v. Here's why: %v\n", bucketName, objectKey, err)
+		}
+		return nil, err
+	}
+	defer result.Body.Close()
+	body, err := io.ReadAll(result.Body)
+	if err != nil {
+		log.Printf("Couldn't read object body from %v. Here's why: %v\n", objectKey, err)
+	}
+	return body, err
 }

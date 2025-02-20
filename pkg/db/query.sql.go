@@ -22,6 +22,24 @@ func (q *Queries) DeleteListeningHistoryByAnonID(ctx context.Context, anonID pgt
 	return err
 }
 
+const getAlbumByArtist = `-- name: GetAlbumByArtist :one
+SELECT a.id, a.name, a.cover, a.artist
+FROM albums a
+WHERE a.artist = $1
+`
+
+func (q *Queries) GetAlbumByArtist(ctx context.Context, artist pgtype.Text) (Album, error) {
+	row := q.db.QueryRow(ctx, getAlbumByArtist, artist)
+	var i Album
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Cover,
+		&i.Artist,
+	)
+	return i, err
+}
+
 const getAlbumById = `-- name: GetAlbumById :one
 SELECT a.id, a.name, a.cover, a.artist
 FROM albums a
@@ -209,6 +227,64 @@ func (q *Queries) GetTrackCount(ctx context.Context) (int64, error) {
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getTracksByAlbumId = `-- name: GetTracksByAlbumId :many
+SELECT 
+    id,
+    vocal_folder_path,
+    instrumental_folder_path,
+    album_id,
+    total_duration,
+    info,
+    instrumental,
+    tempo,
+    "key"
+FROM tracks
+WHERE album_id = $1
+`
+
+type GetTracksByAlbumIdRow struct {
+	ID                     string
+	VocalFolderPath        pgtype.Text
+	InstrumentalFolderPath pgtype.Text
+	AlbumID                pgtype.Text
+	TotalDuration          pgtype.Numeric
+	Info                   []byte
+	Instrumental           pgtype.Bool
+	Tempo                  pgtype.Numeric
+	Key                    pgtype.Text
+}
+
+// Gets basic track information filtered by artist
+func (q *Queries) GetTracksByAlbumId(ctx context.Context, albumID pgtype.Text) ([]GetTracksByAlbumIdRow, error) {
+	rows, err := q.db.Query(ctx, getTracksByAlbumId, albumID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetTracksByAlbumIdRow
+	for rows.Next() {
+		var i GetTracksByAlbumIdRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.VocalFolderPath,
+			&i.InstrumentalFolderPath,
+			&i.AlbumID,
+			&i.TotalDuration,
+			&i.Info,
+			&i.Instrumental,
+			&i.Tempo,
+			&i.Key,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTracksByArtist = `-- name: GetTracksByArtist :many

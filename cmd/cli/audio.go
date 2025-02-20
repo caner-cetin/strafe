@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jedib0t/go-pretty/table"
 	"github.com/jedib0t/go-pretty/text"
+	"github.com/muesli/termenv"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -75,15 +77,16 @@ source %s`, color.MagentaString("audio"), color.MagentaString("audio"), color.Wh
 
 func getAudioRootCmd() *cobra.Command {
 	uploadCmd.PersistentFlags().Int32VarP(&uploadCfg.WaveformPPS, "pps", "P", 100, "waveform zoom level (pixels per second)")
-	uploadCmd.PersistentFlags().StringVar(&uploadCfg.ModelCheckpoint, "model", "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt", "model name for audio splitter, see https://raw.githubusercontent.com/nomadkaraoke/python-audio-separator/refs/heads/main/audio_separator/models.json for full list")
+	uploadCmd.PersistentFlags().StringVar(&uploadCfg.ModelCheckpoint, "model", "mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt", fmt.Sprintf("model name for audio splitter, see %s for full list", color.MagentaString("strafe audio models")))
 	uploadCmd.PersistentFlags().StringVar(&uploadCfg.ModelDownloadDir, "model_file_directory", "/tmp/audio-separator-models/", "model download folder / file directory on the host machine")
 	uploadCmd.PersistentFlags().StringVar(&uploadCfg.OutputDir, "audio_output_directory", "/tmp/strafe-audio-separator-audio/", "directory to write output files from audio-splitter")
 	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.IsInstrumental, "instrumental", false, "specify if the audio is instrumental")
 	uploadCmd.PersistentFlags().BoolVar(&uploadCfg.UseGPU, "gpu", false, "use gpu during audio separation")
 	uploadCmd.PersistentFlags().BoolVarP(&uploadCfg.DryRun, "dry_run", "d", false, "files and metadata will not be uploaded to S3 and database")
-	uploadCmd.PersistentFlags().StringVarP(&uploadCfg.CoverArtPath, "cover_art", "c", "", "cover art for the tracks album, required")
+	uploadCmd.PersistentFlags().StringVarP(&uploadCfg.CoverArtPath, "cover_art", "c", "", "cover art for the tracks album, required if album does not exist yet.")
 
 	modelsCmd.PersistentFlags().StringVar(&modelsCfg.Source, "src", "https://raw.githubusercontent.com/nomadkaraoke/python-audio-separator/refs/heads/main/audio_separator/models.json", "model source")
+
 	audioCmd.AddCommand(uploadCmd)
 	audioCmd.AddCommand(modelsCmd)
 	audioCmd.PersistentFlags().StringVarP(&audioPath, "input", "i", "", "path of audio")
@@ -140,13 +143,18 @@ type audioProcessor struct {
 	db_record   db.InsertTrackParams
 	audioFormat string
 	spinner     *spinner.Spinner
+	conditions  struct {
+		// set to true if the album is uploaded for the first time
+		// and the album is inserted at the same time with track is inserted
+		//
+		// if this is set to true and CoverArtPath in upload config is empty
+		// command will throw error and exit
+		shouldUploadCoverArt bool
+	}
 }
 
 func processAndUploadAudio(cmd *cobra.Command, args []string) {
 	exitIfImage(DoesNotExist)
-	if uploadCfg.CoverArtPath == "" {
-		log.Fatal("cover art path is not given")
-	}
 	ctx := cmd.Context()
 	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
 
@@ -461,8 +469,12 @@ func (p *audioProcessor) loadOrCreateAlbum(ctx context.Context) {
 			Name:   pgtype.Text{String: p.info.Album, Valid: true},
 			Artist: pgtype.Text{String: p.info.Artist, Valid: true}},
 	)
+	p.conditions.shouldUploadCoverArt = false
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			if p.cfg.CoverArtPath == "" {
+				log.Fatal("corresponding album does not exist in database, and cover art path is not given with the command")
+			}
 			albumId, err = qtx.InsertAlbum(ctx, db.InsertAlbumParams{
 				ID:     uuid.NewString(),
 				Name:   pgtype.Text{String: p.info.Album, Valid: true},
@@ -470,12 +482,13 @@ func (p *audioProcessor) loadOrCreateAlbum(ctx context.Context) {
 				Artist: pgtype.Text{String: p.info.Artist, Valid: true},
 			})
 			check(err)
+			err = tx.Commit(ctx)
+			check(err)
+			p.conditions.shouldUploadCoverArt = true
 		} else {
 			log.Fatal(err)
 		}
 	}
-	err = tx.Commit(ctx)
-	check(err)
 	p.db_record.AlbumID = pgtype.Text{String: albumId, Valid: true}
 	p.db_record.AlbumName = pgtype.Text{String: p.info.Album, Valid: true}
 }
@@ -517,21 +530,11 @@ func (p *audioProcessor) upload() {
 		uploadSegments("vocal", vocals)
 	}
 	uploadSegments("instrumental", instrumentals)
-	objs, err := p.app.ListObjects(p.ctx, viper.GetString(internal.S3_BUCKET_NAME))
-	check(err)
-	var coverArtFound = false
-	var coverArtKey = p.coverArtS3Key()
-	for _, obj := range objs {
-		if *obj.Key == coverArtKey {
-			coverArtFound = true
-			break
-		}
-	}
-	if !coverArtFound {
+	if p.conditions.shouldUploadCoverArt {
 		coverArtBytes, err := os.ReadFile(uploadCfg.CoverArtPath)
 		check(err)
-		log.Infof("uploading cover art to %s", coverArtKey)
-		_, err = p.app.UploadObject(p.ctx, viper.GetString(internal.S3_BUCKET_NAME), coverArtKey, coverArtBytes)
+		log.Infof("uploading cover art to %s", p.coverArtS3Key())
+		_, err = p.app.UploadObject(p.ctx, viper.GetString(internal.S3_BUCKET_NAME), p.coverArtS3Key(), coverArtBytes)
 		check(err)
 	}
 }
@@ -597,4 +600,88 @@ func listModels(cmd *cobra.Command, args []string) {
 	})
 
 	t.Render()
+}
+
+func drawWaveform(data []int, width int, height int) string {
+	output := termenv.NewOutput(os.Stdout)
+	p := output.ColorProfile()
+
+	bgStyle := termenv.Style{}.Background(p.Color("#121212"))
+	waveStyle := termenv.Style{}.Foreground(p.Color("#E6E6E6"))
+	centerStyle := termenv.Style{}.Foreground(p.Color("#404040"))
+
+	canvas := make([][]string, height)
+	for i := range canvas {
+		canvas[i] = make([]string, width)
+		for j := range canvas[i] {
+			canvas[i][j] = " "
+		}
+	}
+
+	centerY := height / 2
+
+	maxAmp := 1.0
+	for _, v := range data {
+		if abs := math.Abs(float64(v)); abs > maxAmp {
+			maxAmp = abs
+		}
+	}
+
+	samplesPerCol := len(data) / width
+	if samplesPerCol < 2 {
+		samplesPerCol = 2
+	}
+
+	for x := 0; x < width; x++ {
+		start := x * samplesPerCol
+		end := start + samplesPerCol
+		if end > len(data) {
+			end = len(data)
+		}
+		if start >= len(data) {
+			break
+		}
+
+		min, max := 0.0, 0.0
+		for i := start; i < end; i += 2 {
+			if i >= len(data) {
+				break
+			}
+			min = math.Min(min, float64(data[i]))
+			if i+1 < len(data) {
+				max = math.Max(max, float64(data[i+1]))
+			}
+		}
+
+		scale := float64(height/2-1) / maxAmp * 0.8
+		scaledMin := int(math.Floor(min * scale))
+		scaledMax := int(math.Ceil(max * scale))
+
+		for y := centerY + scaledMin; y <= centerY+scaledMax; y++ {
+			if y >= 0 && y < height {
+				canvas[y][x] = "│"
+			}
+		}
+	}
+
+	var buffer strings.Builder
+
+	for y := 0; y < height; y++ {
+		line := make([]string, width)
+		for x := 0; x < width; x++ {
+			if canvas[y][x] == " " {
+				line[x] = bgStyle.Styled(" ")
+			} else {
+				if y == centerY {
+					line[x] = centerStyle.Styled("─")
+				} else {
+					line[x] = waveStyle.Styled("│")
+				}
+			}
+		}
+		buffer.WriteString(strings.Join(line, ""))
+		buffer.WriteString("\n")
+	}
+
+	return buffer.String()
 }

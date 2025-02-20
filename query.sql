@@ -13,6 +13,22 @@ SELECT
 FROM tracks
 WHERE info->>'Artist' = $1;
 
+-- name: GetTracksByAlbumId :many
+-- Gets basic track information filtered by album ID, sorted by track list
+SELECT 
+    id,
+    vocal_folder_path,
+    instrumental_folder_path,
+    album_id,
+    total_duration,
+    info,
+    instrumental,
+    tempo,
+    "key"
+FROM tracks
+WHERE album_id = $1;
+ORDER BY info->>'Track';
+
 -- name: GetTracksByGenre :many
 -- Gets basic track information filtered by genre
 SELECT 
@@ -87,6 +103,12 @@ WHERE a.id = $1;
 SELECT a.*
 FROM albums a
 WHERE a.name = $1;
+
+-- name: GetAlbumByArtist :one
+SELECT a.*
+FROM albums a
+WHERE a.artist = $1;
+
 
 -- name: GetAlbumByNameAndArtist :one
 SELECT a.*

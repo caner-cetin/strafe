@@ -4,7 +4,7 @@ docker:
   # image of Dockerfile in main folder
   # you can either
   #   a. use prebuilt image from docker hub (https://hub.docker.com/r/cansucetin/strafe)
-  #   b. use `strafe docker image build` command (you must run the command in source code folder, or specify source code folder)
+  #   b. use `strafe docker image build` command (cmd must be run under source code folder, or specify source code folder with flags)
   #      and build your own image.
   # if going with a, keep the image name same, you will pull my image.
   # if going with b, use image name `strafe` or something similar.

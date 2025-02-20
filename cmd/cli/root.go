@@ -50,6 +50,7 @@ func init() {
 	rootCmd.AddCommand(getDockerRootCmd())
 	rootCmd.AddCommand(getAudioRootCmd())
 	rootCmd.AddCommand(server.GetRunCmd())
+	rootCmd.AddCommand(getDBRootCmd())
 }
 
 func modifyHelp(fn func(cmd *cobra.Command, args []string)) func(cmd *cobra.Command, args []string) {
