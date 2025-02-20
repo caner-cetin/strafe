@@ -1,7 +1,5 @@
 FROM debian:bookworm
 RUN apt-get update && \
-  apt-get -y install software-properties-common && \
-  apt-get update && \
   apt-get install -y ffmpeg cmake libfftw3-dev git
 
 RUN apt-get update && apt-get install -y \
