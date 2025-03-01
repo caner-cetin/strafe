@@ -79,7 +79,8 @@ func (q *Queries) GetAlbumByName(ctx context.Context, name pgtype.Text) (Album, 
 const getAlbumByNameAndArtist = `-- name: GetAlbumByNameAndArtist :one
 SELECT a.id, a.name, a.cover, a.artist
 FROM albums a
-WHERE a.name = $1 AND a.artist = $2
+WHERE a.name = $1
+    AND a.artist = $2
 `
 
 type GetAlbumByNameAndArtistParams struct {
@@ -99,6 +100,20 @@ func (q *Queries) GetAlbumByNameAndArtist(ctx context.Context, arg GetAlbumByNam
 	return i, err
 }
 
+const getAlbumCoverByID = `-- name: GetAlbumCoverByID :one
+SELECT a.cover
+FROM albums a
+WHERE a.id = $1
+`
+
+// Get album cover by the album ID
+func (q *Queries) GetAlbumCoverByID(ctx context.Context, id string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, getAlbumCoverByID, id)
+	var cover pgtype.Text
+	err := row.Scan(&cover)
+	return cover, err
+}
+
 const getAlbumIDByName = `-- name: GetAlbumIDByName :one
 SELECT a.id
 FROM albums a
@@ -115,7 +130,8 @@ func (q *Queries) GetAlbumIDByName(ctx context.Context, name pgtype.Text) (strin
 const getAlbumIDByNameAndArtist = `-- name: GetAlbumIDByNameAndArtist :one
 SELECT a.id
 FROM albums a
-WHERE a.name = $1 AND a.artist = $2
+WHERE a.name = $1
+    AND a.artist = $2
 `
 
 type GetAlbumIDByNameAndArtistParams struct {
@@ -133,7 +149,7 @@ func (q *Queries) GetAlbumIDByNameAndArtist(ctx context.Context, arg GetAlbumIDB
 const getRandomTrack = `-- name: GetRandomTrack :one
 SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
-LEFT JOIN albums a ON a.id = t.album_id
+    LEFT JOIN albums a ON a.id = t.album_id
 ORDER BY RANDOM()
 LIMIT 1
 `
@@ -162,8 +178,9 @@ func (q *Queries) GetRandomTrack(ctx context.Context) (Track, error) {
 const getRandomUnlistenedTrack = `-- name: GetRandomUnlistenedTrack :one
 SELECT t.id, t.vocal_folder_path, t.instrumental_folder_path, t.album_id, t.total_duration, t.info, t.instrumental, t.tempo, t.key, t.vocal_waveform, t.instrumental_waveform, t.album_name
 FROM tracks t
-LEFT JOIN albums a ON a.id = t.album_id
-LEFT JOIN listening_histories lh ON t.id = lh.track_id AND lh.anon_id = $1
+    LEFT JOIN albums a ON a.id = t.album_id
+    LEFT JOIN listening_histories lh ON t.id = lh.track_id
+    AND lh.anon_id = $1
 WHERE lh.track_id IS NULL
 ORDER BY RANDOM()
 LIMIT 1
@@ -218,7 +235,8 @@ func (q *Queries) GetTrackByID(ctx context.Context, id string) (Track, error) {
 }
 
 const getTrackCount = `-- name: GetTrackCount :one
-SELECT COUNT(*) FROM tracks
+SELECT COUNT(*)
+FROM tracks
 `
 
 // Gets total number of tracks
@@ -230,8 +248,7 @@ func (q *Queries) GetTrackCount(ctx context.Context) (int64, error) {
 }
 
 const getTracksByAlbumId = `-- name: GetTracksByAlbumId :many
-SELECT 
-    id,
+SELECT id,
     vocal_folder_path,
     instrumental_folder_path,
     album_id,
@@ -289,8 +306,7 @@ func (q *Queries) GetTracksByAlbumId(ctx context.Context, albumID pgtype.Text) (
 }
 
 const getTracksByArtist = `-- name: GetTracksByArtist :many
-SELECT 
-    id,
+SELECT id,
     vocal_folder_path,
     instrumental_folder_path,
     album_id,
@@ -347,8 +363,7 @@ func (q *Queries) GetTracksByArtist(ctx context.Context, info []byte) ([]GetTrac
 }
 
 const getTracksByGenre = `-- name: GetTracksByGenre :many
-SELECT 
-    id,
+SELECT id,
     vocal_folder_path,
     instrumental_folder_path,
     album_id,
@@ -405,8 +420,7 @@ func (q *Queries) GetTracksByGenre(ctx context.Context, info []byte) ([]GetTrack
 }
 
 const insertAlbum = `-- name: InsertAlbum :one
-INSERT INTO public.albums
-(id, "name", cover, artist)
+INSERT INTO public.albums (id, "name", cover, artist)
 VALUES($1, $2, $3, $4)
 RETURNING id
 `
@@ -432,9 +446,34 @@ func (q *Queries) InsertAlbum(ctx context.Context, arg InsertAlbumParams) (strin
 }
 
 const insertTrack = `-- name: InsertTrack :exec
-INSERT INTO public.tracks
-(id, vocal_folder_path, instrumental_folder_path, album_id, total_duration, info, instrumental, tempo, "key", vocal_waveform, instrumental_waveform, album_name)
-VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO public.tracks (
+        id,
+        vocal_folder_path,
+        instrumental_folder_path,
+        album_id,
+        total_duration,
+        info,
+        instrumental,
+        tempo,
+        "key",
+        vocal_waveform,
+        instrumental_waveform,
+        album_name
+    )
+VALUES(
+        $1,
+        $2,
+        $3,
+        $4,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        $10,
+        $11,
+        $12
+    )
 `
 
 type InsertTrackParams struct {
@@ -487,8 +526,7 @@ func (q *Queries) RecordListeningHistory(ctx context.Context, arg RecordListenin
 }
 
 const searchTracks = `-- name: SearchTracks :many
-SELECT 
-    id,
+SELECT id,
     vocal_folder_path,
     instrumental_folder_path,
     album_id,
@@ -498,10 +536,9 @@ SELECT
     tempo,
     "key"
 FROM tracks
-WHERE 
-    info->>'Title' ILIKE '%' || $1 || '%' OR
-    info->>'Artist' ILIKE '%' || $1 || '%' OR
-    info->>'Genre' ILIKE '%' || $1 || '%'
+WHERE info->>'Title' ILIKE '%' || $1 || '%'
+    OR info->>'Artist' ILIKE '%' || $1 || '%'
+    OR info->>'Genre' ILIKE '%' || $1 || '%'
 LIMIT $2 OFFSET $3
 `
 

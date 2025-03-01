@@ -47,7 +47,7 @@ build: clean setup tidy generate
     chmod +x {{build_dir}}/{{name}}-darwin-*
 
 build-current: tidy generate setup
-    go build {{build_flags}} -o {{build_dir}}/{{name}} ./cmd
+    go build {{build_flags}} -o {{build_dir}}/{{name}}
     chmod +x {{build_dir}}/{{name}}
 
 

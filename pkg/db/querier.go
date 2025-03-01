@@ -17,6 +17,8 @@ type Querier interface {
 	GetAlbumById(ctx context.Context, id string) (Album, error)
 	GetAlbumByName(ctx context.Context, name pgtype.Text) (Album, error)
 	GetAlbumByNameAndArtist(ctx context.Context, arg GetAlbumByNameAndArtistParams) (Album, error)
+	// Get album cover by the album ID
+	GetAlbumCoverByID(ctx context.Context, id string) (pgtype.Text, error)
 	GetAlbumIDByName(ctx context.Context, name pgtype.Text) (string, error)
 	GetAlbumIDByNameAndArtist(ctx context.Context, arg GetAlbumIDByNameAndArtistParams) (string, error)
 	// Get a completely random track

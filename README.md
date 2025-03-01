@@ -111,7 +111,9 @@ same binaries / packages from `just package` command
 ```bash
 # im using this because of my lazy ass
 go install github.com/caner-cetin/strafe@latest
-strafe server -p 37550 -v
+# if this doesnt work
+GOPROXY=direct go install github.com/caner-cetin/strafe@latest
+strafe server -p 37550 -v > logs.txt &
 ```
 ## usage
 fill the `.strafe.dummy.yaml`, rename to `.strafe.yaml` move it under your home directory

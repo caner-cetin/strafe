@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"github.com/caner-cetin/strafe/internal"
-	"github.com/caner-cetin/strafe/pkg/db"
 	"strconv"
 	"time"
+
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/db"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -53,9 +53,8 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var anonId = pgtype.Text{String: body.AnonID, Valid: true}
-	var track db.Track
 	var err error
-	track, err = app.DB.GetRandomUnlistenedTrack(r.Context(), anonId)
+	track, err := app.DB.GetRandomUnlistenedTrack(r.Context(), anonId)
 	no_rows := errors.Is(err, sql.ErrNoRows)
 	if err != nil && (!no_rows) {
 		internal.ServerError(w, err)
@@ -83,13 +82,13 @@ func GetRandomTrack(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	streamTrackInfo(w, track)
+	streamTrackInfo(w, track, app)
 	err = app.DB.RecordListeningHistory(
 		r.Context(),
 		db.RecordListeningHistoryParams{
 			TrackID:    pgtype.Text{String: track.ID, Valid: true},
 			AnonID:     anonId,
-			ListenedAt: pgtype.Timestamptz{Time: time.Now(), InfinityModifier: pgtype.Infinity},
+			ListenedAt: pgtype.Timestamptz{Time: time.Now(), InfinityModifier: pgtype.Infinity, Valid: true},
 		},
 	)
 	if err != nil {
@@ -106,12 +105,17 @@ func GetTrack(w http.ResponseWriter, r *http.Request) {
 		internal.ServerError(w, err)
 		return
 	}
-	streamTrackInfo(w, track)
+	streamTrackInfo(w, track, app)
 }
 
-func streamTrackInfo(w http.ResponseWriter, track db.Track) {
+func streamTrackInfo(w http.ResponseWriter, track db.Track, app internal.AppCtx) {
+	cover, err := app.DB.GetAlbumCoverByID(app.Context, track.AlbumID.String)
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
 	var response Track
-	response.Cover = fmt.Sprintf("%s/cover.jpg", track.AlbumName.String)
+	response.Cover = cover.String
 	response.ID = track.ID
 
 	response.SavedVocalFolderPath = track.VocalFolderPath.String
@@ -172,7 +176,7 @@ func streamTrackInfo(w http.ResponseWriter, track db.Track) {
 		}
 		response.Info.VocalWaveform = vocalWf
 	}
-
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
