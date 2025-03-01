@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TABLE public.tracks (
+CREATE TABLE IF NOT EXISTS public.tracks (
 	id text NOT NULL,
 	vocal_folder_path text NULL,
 	instrumental_folder_path text NULL,

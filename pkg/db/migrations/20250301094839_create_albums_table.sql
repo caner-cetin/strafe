@@ -1,6 +1,6 @@
 -- +goose Up
 -- +goose StatementBegin
-CREATE TABLE public.albums (
+CREATE TABLE IF NOT EXISTS public.albums (
 	id text NOT NULL,
 	"name" text NULL,
 	cover text NULL,
