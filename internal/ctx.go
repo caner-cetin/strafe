@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"strafe/pkg/db"
+	"github.com/caner-cetin/strafe/pkg/db"
 	"time"
 
 	log "github.com/sirupsen/logrus"

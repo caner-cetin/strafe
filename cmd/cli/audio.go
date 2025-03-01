@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strafe/internal"
-	"strafe/pkg/db"
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/db"
 	"strings"
 	"time"
 

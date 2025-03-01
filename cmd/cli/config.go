@@ -2,7 +2,7 @@ package cli
 
 import (
 	"os"
-	"strafe/internal"
+	"github.com/caner-cetin/strafe/internal"
 	"strings"
 
 	"github.com/fatih/color"

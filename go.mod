@@ -1,4 +1,4 @@
-module strafe
+module github.com/caner-cetin/strafe
 
 go 1.23.3
 

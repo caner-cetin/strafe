@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strafe/internal"
-	"strafe/pkg/db"
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/db"
 	"strconv"
 	"time"
 

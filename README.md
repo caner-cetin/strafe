@@ -6,13 +6,16 @@ uploader cli and server for https://dj.cansu.dev
     - [uv](#uv)
     - [docker](#docker)
   - [run](#run)
+    - [build yourself](#build-yourself)
+    - [pre-built binary](#pre-built-binary)
+    - [go](#go)
   - [usage](#usage)
 
 wip
 
 ## install
 
-two dependencies required 
+**no dependencies required for server, only required for uploader**
 
 ### uv
 
@@ -43,7 +46,11 @@ install anything that is compatible with Docker, I am using Orbstack on Mac, and
 
 ## run
 
+### build yourself
+
 ```bash
+git clone https://github.com/caner-cetin/strafe.git
+cd strafe
 # if you want to build for your own system
 just build-current
 # will yield
@@ -80,6 +87,32 @@ just package
 # deflates around 60-70%
 ```
 
+### pre-built binary
+
+https://github.com/caner-cetin/strafe/releases
+
+same binaries / packages from `just package` command
+```bash
+# strafe-darwin-amd64
+# strafe-darwin-amd64.tar.gz
+# strafe-darwin-arm64
+# strafe-darwin-arm64.tar.gz
+# strafe-linux-amd64
+# strafe-linux-amd64.tar.gz
+# strafe-linux-arm64
+# strafe-linux-arm64.tar.gz
+# strafe-windows-amd64.exe
+# strafe-windows-amd64.zip
+# strafe-windows-arm64.exe
+# strafe-windows-arm64.zip
+```
+
+### go
+```bash
+# im using this because of my lazy ass
+go install github.com/caner-cetin/strafe@latest
+strafe server -p 37550 -v
+```
 ## usage
 fill the `.strafe.dummy.yaml`, rename to `.strafe.yaml` move it under your home directory
 

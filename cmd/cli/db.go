@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"image"
 	"os"
-	"strafe/internal"
-	"strafe/pkg/db"
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/db"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"

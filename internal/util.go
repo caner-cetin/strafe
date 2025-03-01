@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strafe/pkg/db"
+	"github.com/caner-cetin/strafe/pkg/db"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"

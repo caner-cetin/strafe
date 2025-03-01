@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"strafe/internal"
-	"strafe/pkg/server"
 	"time"
+
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/server"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"

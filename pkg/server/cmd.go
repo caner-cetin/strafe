@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strafe/internal"
-	"strafe/pkg/db"
-	"strafe/pkg/server/endpoints"
+	"github.com/caner-cetin/strafe/internal"
+	"github.com/caner-cetin/strafe/pkg/db"
+	"github.com/caner-cetin/strafe/pkg/server/endpoints"
 
 	log "github.com/sirupsen/logrus"
 

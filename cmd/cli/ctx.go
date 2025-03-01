@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"strafe/internal"
+	"github.com/caner-cetin/strafe/internal"
 	"time"
 
 	log "github.com/sirupsen/logrus"

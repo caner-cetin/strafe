@@ -11,9 +11,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strafe/internal"
 	"strings"
 	"time"
+
+	"github.com/caner-cetin/strafe/internal"
 
 	"github.com/briandowns/spinner"
 	"github.com/docker/docker/api/types"
