@@ -15,11 +15,10 @@ CREATE TABLE IF NOT EXISTS public.tracks (
 	album_name text NULL,
 	CONSTRAINT tracks_pkey PRIMARY KEY (id)
 );
-CREATE INDEX idx_tracks_artist ON public.tracks USING btree (((info ->> 'Artist'::text)));
-CREATE INDEX idx_tracks_genre ON public.tracks USING btree (((info ->> 'Genre'::text)));
-CREATE INDEX idx_tracks_title ON public.tracks USING btree (((info ->> 'Title'::text)));
+CREATE INDEX IF NOT EXISTS idx_tracks_artist ON public.tracks USING btree (((info->>'Artist'::text)));
+CREATE INDEX IF NOT EXISTS idx_tracks_genre ON public.tracks USING btree (((info->>'Genre'::text)));
+CREATE INDEX IF NOT EXISTS idx_tracks_title ON public.tracks USING btree (((info->>'Title'::text)));
 -- +goose StatementEnd
-
 -- +goose Down
 -- +goose StatementBegin
 DROP TABLE public.tracks;
