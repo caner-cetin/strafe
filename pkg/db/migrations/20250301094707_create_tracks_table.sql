@@ -1,9 +1,5 @@
--- public.tracks definition
-
--- Drop table
-
--- DROP TABLE public.tracks;
-
+-- +goose Up
+-- +goose StatementBegin
 CREATE TABLE public.tracks (
 	id text NOT NULL,
 	vocal_folder_path text NULL,
@@ -22,29 +18,9 @@ CREATE TABLE public.tracks (
 CREATE INDEX idx_tracks_artist ON public.tracks USING btree (((info ->> 'Artist'::text)));
 CREATE INDEX idx_tracks_genre ON public.tracks USING btree (((info ->> 'Genre'::text)));
 CREATE INDEX idx_tracks_title ON public.tracks USING btree (((info ->> 'Title'::text)));
+-- +goose StatementEnd
 
--- public.listening_histories definition
-
--- Drop table
-
--- DROP TABLE public.listening_histories;
-
-CREATE TABLE public.listening_histories (
-	track_id text NULL,
-	anon_id text NULL,
-	listened_at timestamptz NULL
-);
-
--- public.albums definition
-
--- Drop table
-
--- DROP TABLE public.albums;
-
-CREATE TABLE public.albums (
-	id text NOT NULL,
-	"name" text NULL,
-	cover text NULL,
-	artist text NULL,
-	CONSTRAINT albums_pkey PRIMARY KEY (id)
-);
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE public.tracks;
+-- +goose StatementEnd

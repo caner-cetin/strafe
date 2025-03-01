@@ -2,9 +2,12 @@ version: "2"
 sql:
   - engine: "postgresql"
     queries: "query.sql"
-    schema: "schema.sql"
+    schema: "pkg/db/migrations"
     gen:
       go:
         package: "db"
         out: "pkg/db"
         sql_package: "pgx/v5"
+        sql_driver: "github.com/jackc/pgx/v5"
+        emit_pointers_for_null_types: false
+        emit_interface: true

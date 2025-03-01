@@ -117,12 +117,23 @@ func streamTrackInfo(w http.ResponseWriter, track db.Track) {
 	response.SavedVocalFolderPath = track.VocalFolderPath.String
 	response.SavedInstrumentalFolderPath = track.InstrumentalFolderPath.String
 
-	trackInfo, err := fastjson.ParseBytes(track.Info)
+	length, err := track.TotalDuration.Float64Value()
 	if err != nil {
 		internal.ServerError(w, err)
 		return
 	}
 
+	tempo, err := track.Tempo.Float64Value()
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
+
+	trackInfo, err := fastjson.ParseBytes(track.Info)
+	if err != nil {
+		internal.ServerError(w, err)
+		return
+	}
 	getString := func(key string) string {
 		val := trackInfo.Get(key)
 		if val == nil {
@@ -134,18 +145,6 @@ func streamTrackInfo(w http.ResponseWriter, track db.Track) {
 			return ""
 		}
 		return str
-	}
-
-	length, err := track.TotalDuration.Float64Value()
-	if err != nil {
-		internal.ServerError(w, err)
-		return
-	}
-
-	tempo, err := track.Tempo.Float64Value()
-	if err != nil {
-		internal.ServerError(w, err)
-		return
 	}
 
 	response.Info = TrackInfo{

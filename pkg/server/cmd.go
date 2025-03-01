@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strafe/internal"
+	"strafe/pkg/db"
 	"strafe/pkg/server/endpoints"
 
 	log "github.com/sirupsen/logrus"
@@ -39,7 +40,11 @@ func runServer(command *cobra.Command, args []string) {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	app := internal.AppCtx{}
-	if err := internal.InitializeDB(context.Background(), &app); err != nil {
+	if err := app.InitializeDB(); err != nil {
+		log.Fatal(err)
+	}
+	defer app.Cleanup()
+	if err := db.Migrate(app.StdDB); err != nil {
 		log.Fatal(err)
 	}
 	r.Use(WithAppContext(app))

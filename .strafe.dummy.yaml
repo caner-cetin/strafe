@@ -15,8 +15,10 @@ docker:
 db:
   # postgres://user:password@ip:port/db?sslmode=disable
   url: 
+# cloudflare r2 config
 s3:
   bucket: 
+  # https://ACCOUNT_ID.r2.cloudflarestorage.com
   account_id: 
   access_key_id:
   access_key_secret:

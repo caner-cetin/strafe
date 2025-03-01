@@ -68,3 +68,4 @@ Temporary Items
 # End of https://mrkandreev.name/snippets/gitignore-generator/#Go,Linux,macOS,VisualStudioCode
 .strafe.yaml
 dist
+strafecli

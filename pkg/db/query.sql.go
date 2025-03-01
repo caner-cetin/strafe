@@ -242,6 +242,7 @@ SELECT
     "key"
 FROM tracks
 WHERE album_id = $1
+ORDER BY info->>'Track'
 `
 
 type GetTracksByAlbumIdRow struct {
@@ -256,7 +257,7 @@ type GetTracksByAlbumIdRow struct {
 	Key                    pgtype.Text
 }
 
-// Gets basic track information filtered by artist
+// Gets basic track information filtered by album ID, sorted by track list
 func (q *Queries) GetTracksByAlbumId(ctx context.Context, albumID pgtype.Text) ([]GetTracksByAlbumIdRow, error) {
 	rows, err := q.db.Query(ctx, getTracksByAlbumId, albumID)
 	if err != nil {

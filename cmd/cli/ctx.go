@@ -39,17 +39,17 @@ func WrapCommandWithResources(fn func(cmd *cobra.Command, args []string), config
 		for _, resource := range config.Resources {
 			switch resource {
 			case ResourceDatabase:
-				if err := internal.InitializeDB(ctx, &appCtx); err != nil {
+				if err := appCtx.InitializeDB(); err != nil {
 					log.Errorf("failed to initialize database: %v", err)
 					return
 				}
 			case ResourceDocker:
-				if err := internal.InitializeDocker(&appCtx); err != nil {
+				if err := appCtx.InitializeDocker(); err != nil {
 					log.Errorf("failed to initialize docker: %v", err)
 					return
 				}
 			case ResourceS3:
-				if err := internal.InitializeS3(&appCtx); err != nil {
+				if err := appCtx.InitializeS3(); err != nil {
 					log.Errorf("failed to initialize s3: %v", err)
 					return
 				}

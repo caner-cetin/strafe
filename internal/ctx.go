@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"strafe/pkg/db"
@@ -23,6 +24,7 @@ import (
 
 type AppCtx struct {
 	DB     *db.Queries
+	StdDB  *sql.DB
 	Docker *client.Client
 	Conn   *pgx.Conn
 	S3     struct {
@@ -30,6 +32,7 @@ type AppCtx struct {
 		Config  aws.Config
 		Manager *manager.Uploader
 	}
+	Context context.Context
 }
 
 func (a *AppCtx) CreateBucketIfNotExists(ctx context.Context, bucketName string) (bool, error) {

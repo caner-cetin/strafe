@@ -26,7 +26,7 @@ SELECT
     tempo,
     "key"
 FROM tracks
-WHERE album_id = $1;
+WHERE album_id = $1
 ORDER BY info->>'Track';
 
 -- name: GetTracksByGenre :many

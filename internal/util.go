@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/docker/docker/client"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -61,7 +62,8 @@ func InitConfig() {
 	}
 }
 
-func InitializeDB(ctx context.Context, appCtx *AppCtx) error {
+func (ctx *AppCtx) InitializeDB() error {
+	ctx.Context = context.TODO()
 	if !viper.IsSet(DB_URL) {
 		log.Warn("database url is not set")
 		return nil
@@ -72,25 +74,45 @@ func InitializeDB(ctx context.Context, appCtx *AppCtx) error {
 		return fmt.Errorf("failed to parse database config: %w", err)
 	}
 
-	conn, err := pgx.ConnectConfig(ctx, conf)
+	conn, err := pgx.ConnectConfig(ctx.Context, conf)
 	if err != nil {
 		return fmt.Errorf("failed to connect to database: %w", err)
 	}
-	appCtx.DB = db.New(conn)
-	appCtx.Conn = conn
+	ctx.DB = db.New(conn)
+	ctx.Conn = conn
+	ctx.StdDB = stdlib.OpenDB(*conf)
 	return nil
 }
 
-func InitializeDocker(appCtx *AppCtx) error {
+func (ctx *AppCtx) Cleanup() {
+	if (ctx.Conn != nil && !ctx.Conn.IsClosed()) {
+		err := ctx.Conn.Close(ctx.Context)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = ctx.StdDB.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if (ctx.Docker != nil) {
+		err := ctx.Docker.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func (ctx *AppCtx) InitializeDocker() error {
 	client, err := NewDockerClient()
 	if err != nil {
 		return err
 	}
-	appCtx.Docker = client
+	ctx.Docker = client
 	return nil
 }
 
-func InitializeS3(appCtx *AppCtx) error {
+func (ctx *AppCtx) InitializeS3() error {
 	if !viper.IsSet(S3_ACCESS_KEY_ID) {
 		return fmt.Errorf("access key id is not set")
 	}
@@ -111,16 +133,16 @@ func InitializeS3(appCtx *AppCtx) error {
 	if err != nil {
 		return err
 	}
-	appCtx.S3.Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
+	ctx.S3.Client = s3.NewFromConfig(cfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(fmt.Sprintf("https://%s.r2.cloudflarestorage.com", viper.GetString(S3_ACCOUNT_ID)))
 		o.UsePathStyle = true
 	})
-	appCtx.S3.Manager = manager.NewUploader(appCtx.S3.Client, func(u *manager.Uploader) {
+	ctx.S3.Manager = manager.NewUploader(ctx.S3.Client, func(u *manager.Uploader) {
 		u.PartSize = 5 * 1024 * 1024
-		u.Concurrency = 3           
+		u.Concurrency = 3
 		u.LeavePartsOnError = false
 	})
-	_, err  = appCtx.CreateBucketIfNotExists(context.Background(), viper.GetString(S3_BUCKET_NAME))
+	_, err = ctx.CreateBucketIfNotExists(context.Background(), viper.GetString(S3_BUCKET_NAME))
 	if err != nil {
 		return err
 	}
