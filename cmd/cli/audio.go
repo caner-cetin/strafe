@@ -262,7 +262,7 @@ func (p *audioProcessor) preparePaths() error {
 	hostAudioPathSplit := strings.Split(audioPath, ".")
 	p.audioFormat = hostAudioPathSplit[len(hostAudioPathSplit)-1]
 	if p.audioFormat == "" {
-		log.Fatal().Msg("cannot determine audio format from file extension")
+		return fmt.Errorf("cannot determine audio format from file extension")
 	}
 	fileName := strings.ReplaceAll(hostAudioSplitByPath[len(hostAudioSplitByPath)-1], p.audioFormat, "")
 	p.paths.stems.vocal.filename = fmt.Sprintf("%s_vocals", fileName)
