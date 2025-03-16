@@ -6,10 +6,11 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"github.com/caner-cetin/strafe/pkg/db"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/caner-cetin/strafe/pkg/db"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
@@ -60,9 +61,9 @@ func (a *AppCtx) CreateBucketIfNotExists(ctx context.Context, bucketName string)
 		}
 		err = a.CreateBucket(ctx, viper.GetString(S3_BUCKET_NAME), a.S3.Config.Region)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Failed to create bucket %v. Here's why: %v\n", bucketName, err)
 		} else {
-			log.Println("Bucket created.")
+			log.Printf("Bucket %v created successfully.\n", bucketName)
 		}
 	}
 

@@ -29,8 +29,6 @@ func Execute() {
 	}
 }
 
-var ()
-
 func init() {
 	internal.InitConfig()
 	cobra.OnInitialize(internal.InitConfig)

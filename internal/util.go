@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+
 	"github.com/caner-cetin/strafe/pkg/db"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,8 +14,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/docker/docker/client"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
-	log "github.com/sirupsen/logrus"
+	pgstdlib "github.com/jackc/pgx/v5/stdlib"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -40,21 +42,19 @@ func InitConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		log.Debugf("using config file: %s", viper.ConfigFileUsed())
-
 		viper.SetDefault(DOCKER_IMAGE_NAME, DOCKER_IMAGE_NAME_DEFAULT)
 		viper.SetDefault(DOCKER_IMAGE_TAG, DOCKER_IMAGE_TAG_DEFAULT)
 		viper.SetDefault(DISPLAY_ASCII_ART_ON_HELP, true)
 
 		switch Verbosity {
 		case 1:
-			log.SetLevel(log.InfoLevel)
+			zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		case 2:
-			log.SetLevel(log.DebugLevel)
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		case 3:
-			log.SetLevel(log.TraceLevel)
+			zerolog.SetGlobalLevel(zerolog.TraceLevel)
 		default:
-			log.SetLevel(log.WarnLevel)
+			zerolog.SetGlobalLevel(zerolog.WarnLevel)
 		}
 	} else {
 		fmt.Printf("Error: cannot load config file: %v\n", err)
@@ -65,8 +65,7 @@ func InitConfig() {
 func (ctx *AppCtx) InitializeDB() error {
 	ctx.Context = context.TODO()
 	if !viper.IsSet(DB_URL) {
-		log.Warn("database url is not set")
-		return nil
+		return fmt.Errorf("database url is not set")
 	}
 
 	conf, err := pgx.ParseConfig(viper.GetString(DB_URL))
@@ -80,25 +79,28 @@ func (ctx *AppCtx) InitializeDB() error {
 	}
 	ctx.DB = db.New(conn)
 	ctx.Conn = conn
-	ctx.StdDB = stdlib.OpenDB(*conf)
+	ctx.StdDB = pgstdlib.OpenDB(*conf)
 	return nil
 }
 
 func (ctx *AppCtx) Cleanup() {
-	if (ctx.Conn != nil && !ctx.Conn.IsClosed()) {
+	if ctx.Conn != nil && !ctx.Conn.IsClosed() {
 		err := ctx.Conn.Close(ctx.Context)
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("failed to close pgx connection")
+			return
 		}
 		err = ctx.StdDB.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("failed to close sql.DB connection")
+			return
 		}
 	}
-	if (ctx.Docker != nil) {
+	if ctx.Docker != nil {
 		err := ctx.Docker.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("failed to close docker client")
+			return
 		}
 	}
 }
@@ -152,7 +154,7 @@ func (ctx *AppCtx) InitializeS3() error {
 
 func NewDockerClient() (*client.Client, error) {
 	if !viper.IsSet(DOCKER_SOCKET) {
-		log.Warn("docker socket is not set, defaulting back to unix:///var/run/docker.sock")
+		log.Warn().Msg("docker socket is not set, defaulting back to unix:///var/run/docker.sock")
 		os.Setenv(client.DefaultDockerHost, "unix:///var/run/docker.sock")
 	} else {
 		os.Setenv(client.DefaultDockerHost, viper.GetString(DOCKER_SOCKET))

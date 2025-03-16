@@ -6,8 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type BaseError struct {
@@ -47,26 +46,17 @@ func WriteError(w http.ResponseWriter, err BaseError) {
 		pc, file, no, ok = runtime.Caller(2)
 		details = runtime.FuncForPC(pc)
 	}
-	var entry = log.NewEntry(log.StandardLogger())
-	fields := make(log.Fields)
-	fields["message"] = err.Message
-	if err.Error != nil {
-		fields["error"] = err.Error.Error()
-		cause := errors.Cause(err.Error)
-		if !errors.Is(cause, err.Error) {
-			fields["cause"] = cause
-		}
-	}
+	var entry = log.With().Err(err.Error)
 	if ok {
-		fields["function"] = details.Name()
-		fields["file"] = file
-		fields["line"] = no
+		entry.Str("function", details.Name())
+		entry.Str("file", file)
+		entry.Int("line", no)
 	}
-	entry = entry.WithFields(fields)
+	logger := entry.Logger()
 	if err.Code == http.StatusInternalServerError {
-		entry.Error("internal error")
+		logger.Error().Msg("internal error")
 	} else {
-		entry.Warn("bad request")
+		logger.Warn().Msg("bad request")
 	}
 	w.WriteHeader(err.Code)
 	w.Header().Add("content-type", "application/json")

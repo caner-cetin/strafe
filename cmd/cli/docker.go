@@ -24,7 +24,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/fatih/color"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/spf13/viper"
@@ -79,10 +79,14 @@ this process may take a while.`, color.MagentaString("you dont need this command
 )
 
 var (
-	SourceFolder      string
+	// SourceFolder specifies the directory containing the source code for building the Docker image
+	SourceFolder string
+	// ImageBuildContext holds the build context buffer for Docker image creation
 	ImageBuildContext *bytes.Buffer
-	ForceBuildImage   bool
-	DisableBuildLogs  bool
+	// ForceBuildImage determines whether to rebuild the image even if it already exists
+	ForceBuildImage bool
+	// DisableBuildLogs controls whether to show build logs during image creation
+	DisableBuildLogs bool
 )
 
 func getDockerRootCmd() *cobra.Command {
@@ -104,40 +108,52 @@ func getImageTag() string {
 func imageExists(docker *client.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(internal.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	_, _, err := docker.ImageInspectWithRaw(ctx, viper.GetString(internal.DOCKER_IMAGE_NAME))
-	return err
+	_, err := docker.ImageInspect(ctx, viper.GetString(internal.DOCKER_IMAGE_NAME))
+	if err != nil {
+		return fmt.Errorf("failed to inspect docker image: %w", err)
+	}
+	return nil
 }
 
+// ImageCheckCondition represents the state of a Docker image existence check
 type ImageCheckCondition int
 
 const (
-	Exists       ImageCheckCondition = 0
+	// Exists indicates that the Docker image is present in the local registry
+	Exists ImageCheckCondition = 0
+	// DoesNotExist indicates that the Docker image is not present in the local registry
 	DoesNotExist ImageCheckCondition = 1
 )
 
 func exitIfImage(condition ImageCheckCondition) {
 	docker, err := internal.NewDockerClient()
 	if err != nil {
-		color.Red("error initializing docker client: %s", err.Error())
+		log.Error().Err(err).Msg("error creating docker client")
 		os.Exit(1)
 	}
-	defer docker.Close()
+	defer func() {
+		if err := docker.Close(); err != nil {
+			log.Error().Err(err).Msg("error closing docker client")
+			os.Exit(1)
+		}
+	}()
 	err = imageExists(docker)
 	switch condition {
 	case Exists:
 		if err == nil {
 			color.Cyan("image already exists >.<")
-			os.Exit(0)
+			return
 		}
 	case DoesNotExist:
 		if err != nil {
 			color.Red("image does not exist >///<\n%v", err)
 			color.Red("try using command %s", color.MagentaString("strafe docker image build"))
-			os.Exit(1)
+			return
 		}
 	}
 }
 
+// BuildResponse represents the JSON response structure from Docker image build operations
 type BuildResponse struct {
 	Stream string `json:"stream"`
 	Error  string `json:"error"`
@@ -172,7 +188,7 @@ func buildImage(cmd *cobra.Command, args []string) {
 
 			if message.Error != "" {
 				s.Stop()
-				log.Error(message.Error)
+				log.Error().Msg(message.Error)
 				s.Start()
 				continue
 			}
@@ -237,27 +253,26 @@ func getContainerId(resp *container.CreateResponse, id *string) string {
 }
 
 // removes container by the specified container ID or the create response from ContainerCreate function.
-func removeContainer(ctx context.Context, resp *container.CreateResponse, id *string, docker *client.Client) {
-	var cid = getContainerId(resp, id)
-	log.Infof("force removing container with the id %s", cid)
-	docker.ContainerRemove(ctx, cid, container.RemoveOptions{Force: true})
+func removeContainer(ctx context.Context, resp *container.CreateResponse, id *string, docker *client.Client) error {
+	if err := docker.ContainerRemove(ctx, getContainerId(resp, id), container.RemoveOptions{Force: true}); err != nil {
+		return fmt.Errorf("failed to remove container: %w", err)
+	}
+	return nil
 }
 
 // starts container with the specified container ID or the create response from ContainerCreate function.
-func startContainer(ctx context.Context, resp *container.CreateResponse, id *string, docker *client.Client) {
+func startContainer(ctx context.Context, resp *container.CreateResponse, id *string, docker *client.Client) error {
 	var cid = getContainerId(resp, id)
-	log.Infof("starting container with the id %s", cid)
 	if err := docker.ContainerStart(ctx, cid, container.StartOptions{}); err != nil {
-		log.Fatal(color.RedString(err.Error()))
+		return fmt.Errorf("failed to start container %s: %w", cid, err)
 	}
+	return nil
 }
 
 func healthImage(cmd *cobra.Command, args []string) {
 	ctx := cmd.Context()
 	app := ctx.Value(internal.APP_CONTEXT_KEY).(internal.AppCtx)
-	docker := app.Docker
 	exitIfImage(DoesNotExist)
-	log.Info("checking if exiftool works...")
 	script := `#!/bin/bash
 keyfinder-cli
 echo "exiftool version: $(exiftool -ver)"
@@ -267,12 +282,18 @@ echo "audiowaveform version: $(audiowaveform --version) "
 echo "ffprobe version: $(ffprobe -version)"
 `
 	scriptFile, err := os.CreateTemp(os.TempDir(), "strafe-health-script-*.sh")
-	check(err)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create temporary script file")
+		return
+	}
 	defer scriptFile.Close()
 	defer os.Remove(scriptFile.Name())
 	_, err = io.WriteString(scriptFile, script)
-	check(err)
-	resp, err := docker.ContainerCreate(
+	if err != nil {
+		log.Error().Err(err).Msg("failed to write to temporary script file")
+		return
+	}
+	resp, err := app.Docker.ContainerCreate(
 		ctx,
 		&container.Config{
 			Image:        getImageTag(),
@@ -293,27 +314,45 @@ echo "ffprobe version: $(ffprobe -version)"
 		nil,
 		nil,
 		"")
-	check(err)
-	defer removeContainer(ctx, &resp, nil, docker)
-	startContainer(ctx, &resp, nil, docker)
-	statusCh, errCh := docker.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create container")
+		return
+	}
+	defer func() {
+		if err := removeContainer(ctx, &resp, nil, app.Docker); err != nil {
+			log.Error().Err(err).Msg("failed to remove container")
+		}
+	}()
+	if err := startContainer(ctx, &resp, nil, app.Docker); err != nil {
+		log.Error().Err(err).Msg("failed to start container")
+		return
+	}
+	statusCh, errCh := app.Docker.ContainerWait(ctx, resp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
-		check(err)
-	case <-statusCh:
-		out, err := docker.ContainerLogs(ctx, resp.ID, container.LogsOptions{ShowStdout: true})
-		check(err)
-		outBytes, err := io.ReadAll(out)
-		check(err)
-		log.Infof("healthcheck:\n%s", string(outBytes))
+		if err != nil {
+			log.Error().Err(err).Msg("error waiting for container")
+			return
+		}
+	case status := <-statusCh:
+		if status.Error != nil {
+			color.Red("container %s exited with status %d: %s", resp.ID, status.StatusCode, status.Error.Message)
+			return
+		}
+		color.Green("image is built and healthy!")
 	}
-	color.Green("image is built and healthy!")
 }
 
 func createBuildContext(contextPath string) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	tw := tar.NewWriter(buf)
-	defer tw.Close()
+	defer func() {
+		if closeErr := tw.Close(); closeErr != nil {
+			err := fmt.Errorf("failed to close tar writer: %w", closeErr)
+			log.Error().Err(err).Msg("error closing tar writer")
+			return
+		}
+	}()
 
 	err := filepath.Walk(contextPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -324,11 +363,11 @@ func createBuildContext(contextPath string) (*bytes.Buffer, error) {
 		}
 		relPath, err := filepath.Rel(contextPath, path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get relative path: %w", err)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read file %s: %w", path, err)
 		}
 		header := &tar.Header{
 			Name:    relPath,
@@ -337,17 +376,17 @@ func createBuildContext(contextPath string) (*bytes.Buffer, error) {
 			ModTime: info.ModTime(),
 		}
 		if err := tw.WriteHeader(header); err != nil {
-			return err
+			return fmt.Errorf("failed to write tar header: %w", err)
 		}
 
 		if _, err := tw.Write(data); err != nil {
-			return err
+			return fmt.Errorf("failed to write tar content: %w", err)
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to walk context path: %w", err)
 	}
 	return buf, nil
 }

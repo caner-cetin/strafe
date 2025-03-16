@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"os"
+	"strings"
+
 	"github.com/caner-cetin/strafe/internal"
 	"github.com/caner-cetin/strafe/pkg/db"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/qeesung/image2ascii/convert"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -29,6 +29,7 @@ var (
 	}
 )
 
+// SearchAlbumConfig contains configuration for album search operations
 type SearchAlbumConfig struct {
 	Name   string
 	Artist string
@@ -60,24 +61,34 @@ func searchAlbum(cmd *cobra.Command, args []string) {
 	var nameSet = searchAlbumCfg.Name != ""
 	var album db.Album
 	var err error
-	if artistSet && nameSet {
+	switch {
+	case artistSet && nameSet:
 		album, err = app.DB.GetAlbumByNameAndArtist(ctx,
 			db.GetAlbumByNameAndArtistParams{
 				Artist: pgtype.Text{String: searchAlbumCfg.Artist, Valid: true},
 				Name:   pgtype.Text{String: searchAlbumCfg.Name, Valid: true}})
-	} else if artistSet {
+	case artistSet:
 		album, err = app.DB.GetAlbumByArtist(ctx, pgtype.Text{String: searchAlbumCfg.Artist, Valid: true})
-	} else if nameSet {
+	case nameSet:
 		album, err = app.DB.GetAlbumByName(ctx, pgtype.Text{String: searchAlbumCfg.Name, Valid: true})
-	} else {
-		log.Warn("album artist or name must be specified for search")
-		os.Exit(1)
+	default:
+		log.Error().Msg("album artist or name must be specified for search")
+		return
 	}
-	check(err)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get album")
+		return
+	}
 	coverArtBytes, err := app.DownloadFile(ctx, viper.GetString(internal.S3_BUCKET_NAME), album.Cover.String)
-	check(err)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to download cover art")
+		return
+	}
 	img, _, err := image.Decode(bytes.NewReader(coverArtBytes))
-	check(err)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to decode cover art")
+		return
+	}
 
 	converter := convert.NewImageConverter()
 
@@ -100,11 +111,15 @@ func searchAlbum(cmd *cobra.Command, args []string) {
 	fmt.Print(asciiLines[4] + spacing + "Tracks:\n")
 	var trackLine = 5
 	tracks, err := app.DB.GetTracksByAlbumId(ctx, pgtype.Text{String: album.ID, Valid: true})
-	check(err)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get tracks")
+		return
+	}
 	for i, track := range tracks {
 		var trackInfo internal.ExifInfo
 		if err := json.Unmarshal(track.Info, &trackInfo); err != nil {
-			log.Fatalf("failed to parse track info: %v", err)
+			log.Error().Err(err).Msg("failed to parse track info")
+			return
 		}
 
 		var seconds pgtype.Float8
