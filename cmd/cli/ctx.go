@@ -10,26 +10,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ResourceType defines the type of resource to be initialized
 type ResourceType int
 
-// Resource types for initialization
 const (
-	// ResourceDatabase represents database resource type
 	ResourceDatabase ResourceType = iota
-	// ResourceDocker represents docker resource type
 	ResourceDocker
-	// ResourceS3 represents S3 resource type
 	ResourceS3
 )
 
-// ResourceConfig holds the configuration for resource initialization
 type ResourceConfig struct {
 	Resources []ResourceType
 	Timeout   *time.Duration
 }
 
-// WrapCommandWithResources wraps a Cobra command function with resource initialization and cleanup logic based on the provided configuration
 func WrapCommandWithResources(fn func(cmd *cobra.Command, args []string), config ResourceConfig) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		var to time.Duration

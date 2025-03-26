@@ -1,6 +1,7 @@
 {
   "go.lintTool": "golangci-lint",
   "go.lintFlags": [
-    "--fast"
-  ]
+    "--fast",
+    "--exclude-use-default"
+  ],
 }

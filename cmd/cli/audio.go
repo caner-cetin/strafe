@@ -39,7 +39,6 @@ var (
 	}
 )
 
-// UploadConfig contains configuration for audio processing and upload
 type UploadConfig struct {
 	ModelCheckpoint  string
 	ModelDownloadDir string
@@ -53,7 +52,6 @@ type UploadConfig struct {
 	CoverArtPath   string
 }
 
-// ModelsConfig contains configuration for audio separator models listing
 type ModelsConfig struct {
 	Source string
 }

@@ -115,13 +115,10 @@ func imageExists(docker *client.Client) error {
 	return nil
 }
 
-// ImageCheckCondition represents the state of a Docker image existence check
 type ImageCheckCondition int
 
 const (
-	// Exists indicates that the Docker image is present in the local registry
-	Exists ImageCheckCondition = 0
-	// DoesNotExist indicates that the Docker image is not present in the local registry
+	Exists       ImageCheckCondition = 0
 	DoesNotExist ImageCheckCondition = 1
 )
 
